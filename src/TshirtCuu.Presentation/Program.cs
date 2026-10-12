@@ -93,11 +93,13 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
+// Swagger UI is enabled in all environments (including Azure Production) so /swagger works live.
+app.UseSwagger();
+app.UseSwaggerUI(options =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+    options.SwaggerEndpoint("/swagger/v1/swagger.json", "T-shirtCuu API v1");
+    options.RoutePrefix = "swagger";
+});
 
 app.UseCors();
 app.UseAuthentication();
