@@ -1,6 +1,6 @@
 # T-shirtCuu API (.NET 9)
 
-Local Web API for the T-shirtCuu mock: quotes, catalog (designs, categories, sizes, colors, pricing), and admin JWT auth.
+Standalone Web API for the T-shirtCuu mock (separate from the Flutter app repo [TshirtCUU](https://github.com/MayroTejada/TshirtCUU)): quotes, catalog (designs, categories, sizes, colors, pricing), and admin JWT auth.
 
 Hosting is **undecided** — this project is meant to run on your machine for now. Pick a host later when you are ready; nothing here assumes a specific cloud vendor.
 
@@ -25,14 +25,13 @@ Solution file: [`TshirtCuu.sln`](./TshirtCuu.sln)
 ## Run locally
 
 ```bash
-cd api/src/TshirtCuu.Presentation
+cd src/TshirtCuu.Presentation
 dotnet run
 ```
 
-Or from the solution folder:
+Or from the repo root:
 
 ```bash
-cd api
 dotnet run --project src/TshirtCuu.Presentation
 ```
 
@@ -46,7 +45,7 @@ By default (Development profile):
 ### Optional: user-secrets instead of Development appsettings
 
 ```bash
-cd api/src/TshirtCuu.Presentation
+cd src/TshirtCuu.Presentation
 dotnet user-secrets init
 dotnet user-secrets set "Jwt:SigningKey" "your-local-dev-key-at-least-32-chars"
 ```
@@ -90,6 +89,5 @@ Public (no token): create quote, read catalog/sizes/colors/pricing.
 ## Build
 
 ```bash
-cd api
 dotnet build
 ```
