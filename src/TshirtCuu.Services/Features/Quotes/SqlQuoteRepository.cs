@@ -75,13 +75,15 @@ public sealed class SqlQuoteRepository(ISqlConnectionFactory connections) : IQuo
                     s.FrontCatalogId,
                     FrontDx = s.FrontPlacement.Dx,
                     FrontDy = s.FrontPlacement.Dy,
-                    FrontScale = s.FrontPlacement.Scale,
+                    FrontScale = s.FrontPlacement.ResolvedScaleX,
+                    FrontScaleY = s.FrontPlacement.ResolvedScaleY,
                     BackSource = s.BackSource.ToString(),
                     s.BackLabel,
                     s.BackCatalogId,
                     BackDx = s.BackPlacement.Dx,
                     BackDy = s.BackPlacement.Dy,
-                    BackScale = s.BackPlacement.Scale
+                    BackScale = s.BackPlacement.ResolvedScaleX,
+                    BackScaleY = s.BackPlacement.ResolvedScaleY
                 },
                 tx,
                 commandType: CommandType.StoredProcedure);
@@ -156,12 +158,14 @@ public sealed class SqlQuoteRepository(ISqlConnectionFactory connections) : IQuo
         public double FrontDx { get; init; }
         public double FrontDy { get; init; }
         public double FrontScale { get; init; } = 1;
+        public double? FrontScaleY { get; init; }
         public string BackSource { get; init; } = "None";
         public string? BackLabel { get; init; }
         public string? BackCatalogId { get; init; }
         public double BackDx { get; init; }
         public double BackDy { get; init; }
         public double BackScale { get; init; } = 1;
+        public double? BackScaleY { get; init; }
 
         public ShirtLine ToShirtLine() => new()
         {
@@ -177,11 +181,25 @@ public sealed class SqlQuoteRepository(ISqlConnectionFactory connections) : IQuo
             FrontSource = Enum.TryParse<ArtworkSource>(FrontSource, true, out var fs) ? fs : ArtworkSource.None,
             FrontLabel = FrontLabel,
             FrontCatalogId = FrontCatalogId,
-            FrontPlacement = new ArtPlacement { Dx = FrontDx, Dy = FrontDy, Scale = FrontScale },
+            FrontPlacement = new ArtPlacement
+            {
+                Dx = FrontDx,
+                Dy = FrontDy,
+                Scale = FrontScale,
+                ScaleX = FrontScale,
+                ScaleY = FrontScaleY ?? FrontScale
+            },
             BackSource = Enum.TryParse<ArtworkSource>(BackSource, true, out var bs) ? bs : ArtworkSource.None,
             BackLabel = BackLabel,
             BackCatalogId = BackCatalogId,
-            BackPlacement = new ArtPlacement { Dx = BackDx, Dy = BackDy, Scale = BackScale }
+            BackPlacement = new ArtPlacement
+            {
+                Dx = BackDx,
+                Dy = BackDy,
+                Scale = BackScale,
+                ScaleX = BackScale,
+                ScaleY = BackScaleY ?? BackScale
+            }
         };
     }
 }
