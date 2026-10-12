@@ -20,12 +20,17 @@ public static class DependencyInjection
     {
         services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
 
-        // Fail fast if connection string missing (env ConnectionStrings__TshirtCuu or user-secrets).
-        if (string.IsNullOrWhiteSpace(configuration.GetConnectionString(SqlConnectionFactory.ConnectionName)))
+        // Validate presence only — do not open a SQL connection at startup.
+        var connectionString = configuration.GetConnectionString(SqlConnectionFactory.ConnectionName);
+        if (string.IsNullOrWhiteSpace(connectionString))
         {
-            throw new InvalidOperationException(
-                "Configure ConnectionStrings:TshirtCuu via environment variable ConnectionStrings__TshirtCuu " +
-                "or user-secrets. Do not commit passwords. Schema/procs: https://github.com/MayroTejada/TShirtMigration");
+            const string message =
+                "STARTUP FAILED: ConnectionStrings:TshirtCuu is missing or empty. " +
+                "Set App Setting / env var ConnectionStrings__TshirtCuu " +
+                "(Azure SQL). Do not commit passwords. " +
+                "Schema/procs: https://github.com/MayroTejada/TShirtMigration";
+            Console.Error.WriteLine(message);
+            throw new InvalidOperationException(message);
         }
 
         services.AddSingleton<ISqlConnectionFactory, SqlConnectionFactory>();

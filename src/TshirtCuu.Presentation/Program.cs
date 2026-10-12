@@ -42,16 +42,29 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-builder.Services.AddTshirtCuuServices(builder.Configuration);
+try
+{
+    builder.Services.AddTshirtCuuServices(builder.Configuration);
+}
+catch (InvalidOperationException ex)
+{
+    // Ensure Azure Log Stream / stdout shows the reason for HTTP 500.30 process exit.
+    Console.Error.WriteLine(ex.Message);
+    throw;
+}
 
 var jwt = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>()
           ?? new JwtOptions();
 
 if (string.IsNullOrWhiteSpace(jwt.SigningKey) || jwt.SigningKey.Length < 32)
 {
-    throw new InvalidOperationException(
-        "Configure Jwt:SigningKey via user-secrets or environment (Jwt__SigningKey), min 32 chars. " +
-        "Do not commit production secrets.");
+    const string message =
+        "STARTUP FAILED: Jwt:SigningKey is missing or shorter than 32 characters. " +
+        "Set App Setting / env var Jwt__SigningKey (min 32 chars). " +
+        "Do not commit production secrets. " +
+        "Note: appsettings.Development.json JWT is not loaded when ASPNETCORE_ENVIRONMENT=Production.";
+    Console.Error.WriteLine(message);
+    throw new InvalidOperationException(message);
 }
 
 builder.Services
@@ -99,5 +112,9 @@ app.MapGet("/", () => Results.Ok(new
     persistence = "Azure SQL stored procedures (TShirtMigration)",
     schemaRepo = "https://github.com/MayroTejada/TShirtMigration"
 }));
+
+app.Logger.LogInformation(
+    "T-shirtCuu API starting. Environment={Environment}. SQL is opened only on first request (stored procedures).",
+    app.Environment.EnvironmentName);
 
 app.Run();
