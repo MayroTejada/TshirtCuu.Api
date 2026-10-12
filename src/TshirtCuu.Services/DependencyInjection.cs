@@ -21,7 +21,12 @@ public static class DependencyInjection
         services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
 
         // Fail fast if connection string missing (env ConnectionStrings__TshirtCuu or user-secrets).
-        _ = new SqlConnectionFactory(configuration).Create();
+        if (string.IsNullOrWhiteSpace(configuration.GetConnectionString(SqlConnectionFactory.ConnectionName)))
+        {
+            throw new InvalidOperationException(
+                "Configure ConnectionStrings:TshirtCuu via environment variable ConnectionStrings__TshirtCuu " +
+                "or user-secrets. Do not commit passwords. Schema/procs: https://github.com/MayroTejada/TShirtMigration");
+        }
 
         services.AddSingleton<ISqlConnectionFactory, SqlConnectionFactory>();
         services.AddScoped<ICatalogRepository, SqlCatalogRepository>();
