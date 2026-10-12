@@ -6,8 +6,8 @@ public sealed class Quotation
     public required string CustomerName { get; set; }
     public required string Email { get; set; }
     public required string Phone { get; set; }
-    public required List<ShirtLine> Shirts { get; set; }
-    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+    public List<ShirtLine> Shirts { get; set; } = [];
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public string Status { get; set; } = "Nueva";
 
     public int TotalUnits => Shirts.Sum(s => s.Quantity);

@@ -3,6 +3,8 @@ namespace TshirtCuu.Domain.Features.Quotes.Models;
 public sealed class ShirtLine
 {
     public required string Id { get; init; }
+    public string QuotationId { get; set; } = string.Empty;
+
     public required string ColorId { get; set; }
     public required string ColorName { get; set; }
     public required string ColorHex { get; set; }

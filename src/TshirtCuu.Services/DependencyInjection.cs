@@ -1,5 +1,8 @@
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using TshirtCuu.Domain.Features.Admin.Models;
 using TshirtCuu.Domain.Features.Admin.Repositories;
 using TshirtCuu.Domain.Features.Catalog.Repositories;
 using TshirtCuu.Domain.Features.Quotes.Repositories;
@@ -12,21 +15,34 @@ namespace TshirtCuu.Services;
 
 public static class DependencyInjection
 {
+    public const string SqlConnectionName = "TshirtCuu";
+
     public static IServiceCollection AddTshirtCuuServices(
         this IServiceCollection services,
         IConfiguration configuration)
     {
         services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
 
-        services.AddSingleton<InMemoryStore>();
-        services.AddSingleton<ICatalogRepository, InMemoryCatalogRepository>();
-        services.AddSingleton<IQuoteRepository, InMemoryQuoteRepository>();
-        services.AddSingleton<IAdminUserRepository, InMemoryAdminUserRepository>();
+        var connectionString = configuration.GetConnectionString(SqlConnectionName);
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            throw new InvalidOperationException(
+                $"Configure ConnectionStrings:{SqlConnectionName} in appsettings.Development.json or user-secrets. " +
+                "Use a local SQL Server string for development; for Azure SQL later, set the Azure connection string via config/secrets — do not commit production passwords.");
+        }
 
-        services.AddSingleton<CatalogService>();
-        services.AddSingleton<QuoteService>();
+        services.AddDbContext<AppDbContext>(options =>
+            options.UseSqlServer(connectionString));
+
+        services.AddScoped<ICatalogRepository, SqlCatalogRepository>();
+        services.AddScoped<IQuoteRepository, SqlQuoteRepository>();
+        services.AddScoped<IAdminUserRepository, SqlAdminUserRepository>();
+
+        services.AddScoped<CatalogService>();
+        services.AddScoped<QuoteService>();
         services.AddSingleton<JwtTokenService>();
-        services.AddSingleton<AdminAuthService>();
+        services.AddScoped<AdminAuthService>();
+        services.AddSingleton<IPasswordHasher<AdminUser>, PasswordHasher<AdminUser>>();
 
         return services;
     }

@@ -8,4 +8,5 @@ public interface IQuoteRepository
     Quotation? GetById(string id);
     Quotation Add(Quotation quotation);
     bool UpdateStatus(string id, string status);
+    string NextQuoteId();
 }

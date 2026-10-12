@@ -1,10 +1,9 @@
 using TshirtCuu.Domain.Features.Quotes.Models;
 using TshirtCuu.Domain.Features.Quotes.Repositories;
-using TshirtCuu.Services.Persistence;
 
 namespace TshirtCuu.Services.Features.Quotes;
 
-public sealed class QuoteService(IQuoteRepository repository, InMemoryStore store)
+public sealed class QuoteService(IQuoteRepository repository)
 {
     public IReadOnlyList<Quotation> List() => repository.GetAll();
 
@@ -17,15 +16,16 @@ public sealed class QuoteService(IQuoteRepository repository, InMemoryStore stor
         if (request.Shirts is null || request.Shirts.Count == 0)
             throw new ArgumentException("At least one shirt is required.");
 
+        var id = repository.NextQuoteId();
         var quotation = new Quotation
         {
-            Id = store.NextQuoteId(),
+            Id = id,
             CustomerName = request.CustomerName.Trim(),
             Email = request.Email.Trim(),
             Phone = request.Phone.Trim(),
             Status = "Nueva",
             CreatedAt = DateTimeOffset.UtcNow,
-            Shirts = request.Shirts.Select(MapShirt).ToList()
+            Shirts = request.Shirts.Select(s => MapShirt(s, id)).ToList()
         };
 
         return repository.Add(quotation);
@@ -34,9 +34,10 @@ public sealed class QuoteService(IQuoteRepository repository, InMemoryStore stor
     public bool UpdateStatus(string id, string status) =>
         repository.UpdateStatus(id, status);
 
-    private static ShirtLine MapShirt(CreateShirtLineRequest s) => new()
+    private static ShirtLine MapShirt(CreateShirtLineRequest s, string quotationId) => new()
     {
         Id = string.IsNullOrWhiteSpace(s.Id) ? Guid.NewGuid().ToString("N")[..8] : s.Id,
+        QuotationId = quotationId,
         ColorId = s.ColorId,
         ColorName = s.ColorName,
         ColorHex = s.ColorHex,

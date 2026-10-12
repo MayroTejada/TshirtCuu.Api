@@ -4,6 +4,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using TshirtCuu.Services;
 using TshirtCuu.Services.Features.Admin;
+using TshirtCuu.Services.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,7 +16,7 @@ builder.Services.AddSwaggerGen(options =>
     {
         Title = "T-shirtCuu API",
         Version = "v1",
-        Description = "Local mock API for quotes, catalog, and admin auth. Hosting is undecided."
+        Description = "API for quotes, catalog, and admin auth. Persistence: SQL Server (Azure SQL in production)."
     });
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
@@ -84,6 +85,17 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
+
+    // Optional seed after migrations have been applied (dotnet ef database update).
+    try
+    {
+        await DbSeeder.SeedAsync(app.Services);
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex,
+            "Could not seed database. Apply migrations first (dotnet ef database update), then restart.");
+    }
 }
 
 app.UseCors();
@@ -95,7 +107,8 @@ app.MapGet("/", () => Results.Ok(new
 {
     name = "T-shirtCuu API",
     docs = "/swagger",
-    auth = "POST /api/admin/auth/login"
+    auth = "POST /api/admin/auth/login",
+    persistence = "SQL Server / Azure SQL"
 }));
 
 app.Run();
