@@ -13,3 +13,8 @@ artifacts/
 # User secrets / local overrides (never commit production keys)
 **/secrets.json
 appsettings.*.local.json
+**/appsettings.Production.json
+
+# SQL lives in MayroTejada/TShirtMigration — never add scripts here
+sql/
+*.sql

@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using TshirtCuu.Domain.Features.Admin.Models;
@@ -15,25 +14,16 @@ namespace TshirtCuu.Services;
 
 public static class DependencyInjection
 {
-    public const string SqlConnectionName = "TshirtCuu";
-
     public static IServiceCollection AddTshirtCuuServices(
         this IServiceCollection services,
         IConfiguration configuration)
     {
         services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
 
-        var connectionString = configuration.GetConnectionString(SqlConnectionName);
-        if (string.IsNullOrWhiteSpace(connectionString))
-        {
-            throw new InvalidOperationException(
-                $"Configure ConnectionStrings:{SqlConnectionName} in appsettings.Development.json or user-secrets. " +
-                "Use a local SQL Server string for development; for Azure SQL later, set the Azure connection string via config/secrets — do not commit production passwords.");
-        }
+        // Fail fast if connection string missing (env ConnectionStrings__TshirtCuu or user-secrets).
+        _ = new SqlConnectionFactory(configuration).Create();
 
-        services.AddDbContext<AppDbContext>(options =>
-            options.UseSqlServer(connectionString));
-
+        services.AddSingleton<ISqlConnectionFactory, SqlConnectionFactory>();
         services.AddScoped<ICatalogRepository, SqlCatalogRepository>();
         services.AddScoped<IQuoteRepository, SqlQuoteRepository>();
         services.AddScoped<IAdminUserRepository, SqlAdminUserRepository>();

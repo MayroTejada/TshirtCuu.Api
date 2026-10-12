@@ -4,7 +4,6 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using TshirtCuu.Services;
 using TshirtCuu.Services.Features.Admin;
-using TshirtCuu.Services.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,7 +15,7 @@ builder.Services.AddSwaggerGen(options =>
     {
         Title = "T-shirtCuu API",
         Version = "v1",
-        Description = "API for quotes, catalog, and admin auth. Persistence: SQL Server (Azure SQL in production)."
+        Description = "API for quotes, catalog, and admin auth. Persistence: Azure SQL via stored procedures (see TShirtMigration)."
     });
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
@@ -51,7 +50,7 @@ var jwt = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOption
 if (string.IsNullOrWhiteSpace(jwt.SigningKey) || jwt.SigningKey.Length < 32)
 {
     throw new InvalidOperationException(
-        "Configure Jwt:SigningKey in appsettings.Development.json or user-secrets (min 32 chars). " +
+        "Configure Jwt:SigningKey via user-secrets or environment (Jwt__SigningKey), min 32 chars. " +
         "Do not commit production secrets.");
 }
 
@@ -85,17 +84,6 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
-
-    // Optional seed after migrations have been applied (dotnet ef database update).
-    try
-    {
-        await DbSeeder.SeedAsync(app.Services);
-    }
-    catch (Exception ex)
-    {
-        app.Logger.LogWarning(ex,
-            "Could not seed database. Apply migrations first (dotnet ef database update), then restart.");
-    }
 }
 
 app.UseCors();
@@ -108,7 +96,8 @@ app.MapGet("/", () => Results.Ok(new
     name = "T-shirtCuu API",
     docs = "/swagger",
     auth = "POST /api/admin/auth/login",
-    persistence = "SQL Server / Azure SQL"
+    persistence = "Azure SQL stored procedures (TShirtMigration)",
+    schemaRepo = "https://github.com/MayroTejada/TShirtMigration"
 }));
 
 app.Run();

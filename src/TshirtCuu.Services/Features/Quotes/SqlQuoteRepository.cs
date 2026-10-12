@@ -1,57 +1,169 @@
-using Microsoft.EntityFrameworkCore;
+using System.Data;
+using Dapper;
 using TshirtCuu.Domain.Features.Quotes.Models;
 using TshirtCuu.Domain.Features.Quotes.Repositories;
 using TshirtCuu.Services.Persistence;
 
 namespace TshirtCuu.Services.Features.Quotes;
 
-public sealed class SqlQuoteRepository(AppDbContext db) : IQuoteRepository
+public sealed class SqlQuoteRepository(ISqlConnectionFactory connections) : IQuoteRepository
 {
-    public IReadOnlyList<Quotation> GetAll() =>
-        db.Quotations
-            .AsNoTracking()
-            .Include(q => q.Shirts)
-            .OrderByDescending(q => q.CreatedAt)
-            .ToList();
+    public IReadOnlyList<Quotation> GetAll()
+    {
+        using var db = connections.Create();
+        using var multi = db.QueryMultiple(
+            "dbo.usp_Quotes_GetAll",
+            commandType: CommandType.StoredProcedure);
+        var quotes = multi.Read<Quotation>().AsList();
+        var shirts = multi.Read<ShirtLineRow>().AsList();
+        AttachShirts(quotes, shirts);
+        return quotes;
+    }
 
-    public Quotation? GetById(string id) =>
-        db.Quotations
-            .Include(q => q.Shirts)
-            .FirstOrDefault(q => q.Id == id);
+    public Quotation? GetById(string id)
+    {
+        using var db = connections.Create();
+        using var multi = db.QueryMultiple(
+            "dbo.usp_Quotes_GetById",
+            new { Id = id },
+            commandType: CommandType.StoredProcedure);
+        var quote = multi.ReadSingleOrDefault<Quotation>();
+        if (quote is null) return null;
+        var shirts = multi.Read<ShirtLineRow>().AsList();
+        AttachShirts([quote], shirts);
+        return quote;
+    }
 
     public Quotation Add(Quotation quotation)
     {
-        foreach (var shirt in quotation.Shirts)
-            shirt.QuotationId = quotation.Id;
+        using var db = connections.Create();
+        db.Open();
+        using var tx = db.BeginTransaction();
 
-        db.Quotations.Add(quotation);
-        db.SaveChanges();
+        db.Execute(
+            "dbo.usp_Quotes_Insert",
+            new
+            {
+                quotation.Id,
+                quotation.CustomerName,
+                quotation.Email,
+                quotation.Phone,
+                quotation.Status,
+                quotation.CreatedAt
+            },
+            tx,
+            commandType: CommandType.StoredProcedure);
+
+        foreach (var s in quotation.Shirts)
+        {
+            s.QuotationId = quotation.Id;
+            db.Execute(
+                "dbo.usp_ShirtLines_Insert",
+                new
+                {
+                    s.Id,
+                    s.QuotationId,
+                    s.ColorId,
+                    s.ColorName,
+                    s.ColorHex,
+                    s.SizeId,
+                    s.SizeLabel,
+                    s.Quantity,
+                    FrontSource = s.FrontSource.ToString(),
+                    s.FrontLabel,
+                    s.FrontCatalogId,
+                    FrontDx = s.FrontPlacement.Dx,
+                    FrontDy = s.FrontPlacement.Dy,
+                    FrontScale = s.FrontPlacement.Scale,
+                    BackSource = s.BackSource.ToString(),
+                    s.BackLabel,
+                    s.BackCatalogId,
+                    BackDx = s.BackPlacement.Dx,
+                    BackDy = s.BackPlacement.Dy,
+                    BackScale = s.BackPlacement.Scale
+                },
+                tx,
+                commandType: CommandType.StoredProcedure);
+        }
+
+        tx.Commit();
         return GetById(quotation.Id)!;
     }
 
     public bool UpdateStatus(string id, string status)
     {
-        var existing = db.Quotations.FirstOrDefault(q => q.Id == id);
-        if (existing is null) return false;
-        existing.Status = status;
-        db.SaveChanges();
-        return true;
+        using var db = connections.Create();
+        var rows = db.QuerySingle<int>(
+            "dbo.usp_Quotes_UpdateStatus",
+            new { Id = id, Status = status },
+            commandType: CommandType.StoredProcedure);
+        return rows > 0;
     }
 
     public string NextQuoteId()
     {
-        var ids = db.Quotations.AsNoTracking().Select(q => q.Id).ToList();
-        var max = 100;
-        foreach (var id in ids)
-        {
-            if (id.StartsWith("COT-", StringComparison.OrdinalIgnoreCase)
-                && int.TryParse(id[4..], out var n)
-                && n > max)
-            {
-                max = n;
-            }
-        }
+        using var db = connections.Create();
+        return db.QuerySingle<string>(
+            "dbo.usp_Quotes_NextId",
+            commandType: CommandType.StoredProcedure);
+    }
 
-        return $"COT-{max + 1:D3}";
+    private static void AttachShirts(IList<Quotation> quotes, IList<ShirtLineRow> rows)
+    {
+        var byQuote = rows.GroupBy(r => r.QuotationId).ToDictionary(g => g.Key, g => g.ToList());
+        foreach (var q in quotes)
+        {
+            if (!byQuote.TryGetValue(q.Id, out var list))
+            {
+                q.Shirts = [];
+                continue;
+            }
+
+            q.Shirts = list.Select(r => r.ToShirtLine()).ToList();
+        }
+    }
+
+    private sealed class ShirtLineRow
+    {
+        public string Id { get; init; } = "";
+        public string QuotationId { get; init; } = "";
+        public string ColorId { get; init; } = "";
+        public string ColorName { get; init; } = "";
+        public string ColorHex { get; init; } = "";
+        public string SizeId { get; init; } = "";
+        public string SizeLabel { get; init; } = "";
+        public int Quantity { get; init; }
+        public string FrontSource { get; init; } = "None";
+        public string? FrontLabel { get; init; }
+        public string? FrontCatalogId { get; init; }
+        public double FrontDx { get; init; }
+        public double FrontDy { get; init; }
+        public double FrontScale { get; init; } = 1;
+        public string BackSource { get; init; } = "None";
+        public string? BackLabel { get; init; }
+        public string? BackCatalogId { get; init; }
+        public double BackDx { get; init; }
+        public double BackDy { get; init; }
+        public double BackScale { get; init; } = 1;
+
+        public ShirtLine ToShirtLine() => new()
+        {
+            Id = Id,
+            QuotationId = QuotationId,
+            ColorId = ColorId,
+            ColorName = ColorName,
+            ColorHex = ColorHex,
+            SizeId = SizeId,
+            SizeLabel = SizeLabel,
+            Quantity = Quantity,
+            FrontSource = Enum.TryParse<ArtworkSource>(FrontSource, true, out var fs) ? fs : ArtworkSource.None,
+            FrontLabel = FrontLabel,
+            FrontCatalogId = FrontCatalogId,
+            FrontPlacement = new ArtPlacement { Dx = FrontDx, Dy = FrontDy, Scale = FrontScale },
+            BackSource = Enum.TryParse<ArtworkSource>(BackSource, true, out var bs) ? bs : ArtworkSource.None,
+            BackLabel = BackLabel,
+            BackCatalogId = BackCatalogId,
+            BackPlacement = new ArtPlacement { Dx = BackDx, Dy = BackDy, Scale = BackScale }
+        };
     }
 }
