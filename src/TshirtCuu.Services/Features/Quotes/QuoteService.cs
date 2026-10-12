@@ -31,8 +31,25 @@ public sealed class QuoteService(IQuoteRepository repository)
         return repository.Add(quotation);
     }
 
-    public bool UpdateStatus(string id, string status) =>
-        repository.UpdateStatus(id, status);
+    public bool UpdateStatus(string id, string status)
+    {
+        var normalized = status.Trim();
+        if (!Quotation.AllowedStatuses.Contains(normalized, StringComparer.Ordinal))
+        {
+            throw new ArgumentException(
+                "Status must be one of: Nueva, En revisión, Respondida.");
+        }
+
+        return repository.UpdateStatus(id, normalized);
+    }
+
+    public Quotation? SaveReply(string id, string customerReply)
+    {
+        if (string.IsNullOrWhiteSpace(customerReply))
+            throw new ArgumentException("CustomerReply is required.");
+
+        return repository.SaveReply(id, customerReply.Trim());
+    }
 
     private static ShirtLine MapShirt(CreateShirtLineRequest s, string quotationId) => new()
     {

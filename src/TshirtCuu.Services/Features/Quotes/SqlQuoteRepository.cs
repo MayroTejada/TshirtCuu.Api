@@ -100,6 +100,21 @@ public sealed class SqlQuoteRepository(ISqlConnectionFactory connections) : IQuo
         return rows > 0;
     }
 
+    public Quotation? SaveReply(string id, string customerReply)
+    {
+        using var db = connections.Create();
+        using var multi = db.QueryMultiple(
+            "dbo.usp_Quotes_SaveReply",
+            new { Id = id, CustomerReply = customerReply },
+            commandType: CommandType.StoredProcedure);
+        var rows = multi.ReadSingle<int>();
+        if (rows <= 0) return null;
+        var quote = multi.ReadSingleOrDefault<Quotation>();
+        if (quote is null) return null;
+        // Reload with shirts for a complete response.
+        return GetById(id);
+    }
+
     public string NextQuoteId()
     {
         using var db = connections.Create();

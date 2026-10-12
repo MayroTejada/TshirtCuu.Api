@@ -8,5 +8,6 @@ public interface IQuoteRepository
     Quotation? GetById(string id);
     Quotation Add(Quotation quotation);
     bool UpdateStatus(string id, string status);
+    Quotation? SaveReply(string id, string customerReply);
     string NextQuoteId();
 }
