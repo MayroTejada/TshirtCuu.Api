@@ -37,7 +37,7 @@ public sealed class QuoteService(IQuoteRepository repository)
         if (!Quotation.AllowedStatuses.Contains(normalized, StringComparer.Ordinal))
         {
             throw new ArgumentException(
-                "Status must be one of: Nueva, En revisión, Respondida.");
+                "Status must be one of: Nueva, En revisión, Respondida, Finalizada, Cancelada.");
         }
 
         return repository.UpdateStatus(id, normalized);
