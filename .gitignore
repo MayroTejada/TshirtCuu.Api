@@ -1,0 +1,15 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+*.swp
+project.lock.json
+artifacts/
+
+# User secrets / local overrides (never commit production keys)
+**/secrets.json
+appsettings.*.local.json
