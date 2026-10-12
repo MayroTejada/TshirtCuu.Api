@@ -16,6 +16,13 @@ public sealed class QuoteService(IQuoteRepository repository)
         if (request.Shirts is null || request.Shirts.Count == 0)
             throw new ArgumentException("At least one shirt is required.");
 
+        foreach (var shirt in request.Shirts)
+        {
+            var fit = shirt.Fit?.Trim() ?? "";
+            if (!ShirtLine.AllowedFits.Contains(fit, StringComparer.Ordinal))
+                throw new ArgumentException("Each shirt Fit must be Dama or Caballero.");
+        }
+
         var id = repository.NextQuoteId();
         var quotation = new Quotation
         {
@@ -61,6 +68,7 @@ public sealed class QuoteService(IQuoteRepository repository)
         SizeId = s.SizeId,
         SizeLabel = s.SizeLabel,
         Quantity = Math.Max(1, s.Quantity),
+        Fit = s.Fit.Trim(),
         FrontSource = s.FrontSource,
         FrontLabel = s.FrontLabel,
         FrontCatalogId = s.FrontCatalogId,
@@ -89,6 +97,7 @@ public sealed class CreateShirtLineRequest
     public required string SizeId { get; init; }
     public required string SizeLabel { get; init; }
     public int Quantity { get; init; } = 1;
+    public required string Fit { get; init; }
     public ArtworkSource FrontSource { get; init; } = ArtworkSource.None;
     public string? FrontLabel { get; init; }
     public string? FrontCatalogId { get; init; }

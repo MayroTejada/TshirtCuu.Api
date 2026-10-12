@@ -12,6 +12,11 @@ public sealed class ShirtLine
     public required string SizeLabel { get; set; }
     public int Quantity { get; set; } = 1;
 
+    /// <summary>Required cut: Dama or Caballero.</summary>
+    public required string Fit { get; set; }
+
+    public static readonly string[] AllowedFits = ["Dama", "Caballero"];
+
     public ArtworkSource FrontSource { get; set; } = ArtworkSource.None;
     public string? FrontLabel { get; set; }
     public string? FrontCatalogId { get; set; }

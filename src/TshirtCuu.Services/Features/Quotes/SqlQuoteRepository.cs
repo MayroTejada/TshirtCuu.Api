@@ -69,6 +69,7 @@ public sealed class SqlQuoteRepository(ISqlConnectionFactory connections) : IQuo
                     s.SizeId,
                     s.SizeLabel,
                     s.Quantity,
+                    s.Fit,
                     FrontSource = s.FrontSource.ToString(),
                     s.FrontLabel,
                     s.FrontCatalogId,
@@ -148,6 +149,7 @@ public sealed class SqlQuoteRepository(ISqlConnectionFactory connections) : IQuo
         public string SizeId { get; init; } = "";
         public string SizeLabel { get; init; } = "";
         public int Quantity { get; init; }
+        public string Fit { get; init; } = "Caballero";
         public string FrontSource { get; init; } = "None";
         public string? FrontLabel { get; init; }
         public string? FrontCatalogId { get; init; }
@@ -171,6 +173,7 @@ public sealed class SqlQuoteRepository(ISqlConnectionFactory connections) : IQuo
             SizeId = SizeId,
             SizeLabel = SizeLabel,
             Quantity = Quantity,
+            Fit = string.IsNullOrWhiteSpace(Fit) ? "Caballero" : Fit,
             FrontSource = Enum.TryParse<ArtworkSource>(FrontSource, true, out var fs) ? fs : ArtworkSource.None,
             FrontLabel = FrontLabel,
             FrontCatalogId = FrontCatalogId,
