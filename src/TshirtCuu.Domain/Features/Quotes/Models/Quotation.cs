@@ -3,7 +3,7 @@ namespace TshirtCuu.Domain.Features.Quotes.Models;
 public sealed class Quotation
 {
     public static readonly string[] AllowedStatuses =
-        ["Nueva", "En revisión", "Respondida", "Finalizada", "Cancelada"];
+        ["Nueva", "En revisión", "Respondida", "Lista", "Finalizada", "Cancelada"];
 
     public required string Id { get; init; }
     public required string CustomerName { get; set; }

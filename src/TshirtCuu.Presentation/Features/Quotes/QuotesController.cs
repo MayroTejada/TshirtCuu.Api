@@ -39,7 +39,7 @@ public sealed class QuotesController(QuoteService quotes) : ControllerBase
         return quote is null ? NotFound() : Ok(quote);
     }
 
-    /// <summary>Admin: update quotation status (Nueva | En revisión | Respondida | Finalizada | Cancelada).</summary>
+    /// <summary>Admin: update quotation status (Nueva | En revisión | Respondida | Lista | Finalizada | Cancelada).</summary>
     [HttpPatch("{id}/status")]
     [Authorize(Roles = "Admin")]
     public IActionResult UpdateStatus(string id, [FromBody] UpdateStatusRequest request)
