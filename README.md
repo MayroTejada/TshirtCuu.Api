@@ -52,8 +52,11 @@ When an admin sets a quote status to **Lista**, the API emails the customer that
 | `Email__Password` | _(empty)_ | Zoho app password / mailbox password |
 | `Email__From` | _(empty)_ | From address (usually same as username) |
 | `Email__FromName` | `T-SHIRTCUU` | Display name |
+| `Email__NotifyTo` | _(empty)_ | Inbox for new-quote alerts (defaults to `Email__From`) |
 
 Sending uses **MailKit** (not `System.Net.Mail`). Port **465** uses implicit SSL (`SslOnConnect`); port **587** uses `StartTls`. Azure App Settings stay `Email__*` only — nothing secret in git.
+
+On **POST /api/quotes**, after the quote is saved, the API emails an alert (folio, customer name, email, phone) to `Email__NotifyTo` or `Email__From`. Create always succeeds if the quote saved; alert success/failure is only written to application logs (never faked as success).
 
 If `Email__Username`, `Email__Password`, or `Email__From` is missing, **Lista still saves** and the PATCH response reports that mail was not sent (`emailSent: false` + `emailNote` + destination `to`). SMTP failures put the **full exception chain** in `emailNote` and do not fail the status change.
 
@@ -66,6 +69,7 @@ export Email__Username='orders@yourdomain.com'
 export Email__Password='<secret>'
 export Email__From='orders@yourdomain.com'
 export Email__FromName='T-SHIRTCUU'
+export Email__NotifyTo='orders@yourdomain.com'   # optional; defaults to Email__From
 ```
 
 ## Run locally

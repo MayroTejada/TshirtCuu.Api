@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using TshirtCuu.Domain.Features.Quotes.Models;
 using TshirtCuu.Domain.Features.Quotes.Repositories;
 using TshirtCuu.Services.Features.Email;
@@ -6,13 +7,20 @@ namespace TshirtCuu.Services.Features.Quotes;
 
 public sealed class QuoteService(
     IQuoteRepository repository,
-    ICustomerEmailSender emailSender)
+    ICustomerEmailSender emailSender,
+    ILogger<QuoteService> logger)
 {
     public IReadOnlyList<Quotation> List() => repository.GetAll();
 
     public Quotation? Get(string id) => repository.GetById(id);
 
-    public Quotation Create(CreateQuoteRequest request)
+    /// <summary>
+    /// Persists the quote first. Then attempts a shop-inbox alert email;
+    /// alert failures are logged and never fail the create.
+    /// </summary>
+    public async Task<Quotation> CreateAsync(
+        CreateQuoteRequest request,
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(request.CustomerName))
             throw new ArgumentException("CustomerName is required.");
@@ -38,7 +46,40 @@ public sealed class QuoteService(
             Shirts = request.Shirts.Select(s => MapShirt(s, id)).ToList()
         };
 
-        return repository.Add(quotation);
+        var saved = repository.Add(quotation);
+
+        // Alert must not undo a successful save. Outcome is only for logs.
+        try
+        {
+            var outcome = await emailSender
+                .TrySendNewQuoteAlertAsync(saved, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (outcome.Sent)
+            {
+                logger.LogInformation(
+                    "New-quote alert for {QuoteId}: sent. {Note}",
+                    saved.Id,
+                    outcome.Note);
+            }
+            else
+            {
+                logger.LogWarning(
+                    "New-quote alert for {QuoteId}: not sent. {Note}",
+                    saved.Id,
+                    outcome.Note);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Sender should not throw; belt-and-suspenders so create still returns 201.
+            logger.LogError(
+                ex,
+                "New-quote alert for {QuoteId} threw unexpectedly; quote was saved.",
+                saved.Id);
+        }
+
+        return saved;
     }
 
     public async Task<UpdateStatusResult> UpdateStatusAsync(

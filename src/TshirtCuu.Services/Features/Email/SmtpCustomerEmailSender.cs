@@ -37,6 +37,66 @@ public sealed class SmtpCustomerEmailSender(
             $"Puedes pasar a recogerla o escribirnos para coordinar la entrega.\n\n" +
             $"— {fromName}";
 
+        return await SendAsync(
+                to,
+                subject,
+                body,
+                fromName,
+                quote.Id,
+                kind: "Lista",
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public async Task<EmailSendOutcome> TrySendNewQuoteAlertAsync(
+        Quotation quote,
+        CancellationToken cancellationToken = default)
+    {
+        var email = options.Value;
+        if (!email.IsConfigured)
+        {
+            return EmailSendOutcome.Skipped(
+                "Alerta de cotización no enviada: faltan ajustes Email__Username, Email__Password y/o Email__From.");
+        }
+
+        var to = email.ResolveNotifyTo();
+        if (string.IsNullOrWhiteSpace(to))
+        {
+            return EmailSendOutcome.Skipped(
+                "Alerta de cotización no enviada: Email__NotifyTo y Email__From están vacíos.");
+        }
+
+        var fromName = string.IsNullOrWhiteSpace(email.FromName) ? "T-SHIRTCUU" : email.FromName.Trim();
+        var subject = $"Nueva cotización {quote.Id} · {fromName}";
+        var body =
+            $"Nueva solicitud de cotización.\n\n" +
+            $"Folio: {quote.Id}\n" +
+            $"Cliente: {quote.CustomerName.Trim()}\n" +
+            $"Email: {quote.Email.Trim()}\n" +
+            $"Teléfono: {quote.Phone.Trim()}\n";
+
+        return await SendAsync(
+                to,
+                subject,
+                body,
+                fromName,
+                quote.Id,
+                kind: "NewQuoteAlert",
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private async Task<EmailSendOutcome> SendAsync(
+        string to,
+        string subject,
+        string body,
+        string fromName,
+        string quoteId,
+        string kind,
+        CancellationToken cancellationToken)
+    {
+        var email = options.Value;
+
         try
         {
             var message = new MimeMessage();
@@ -59,18 +119,36 @@ public sealed class SmtpCustomerEmailSender(
             await client.SendAsync(message, cancellationToken).ConfigureAwait(false);
             await client.DisconnectAsync(true, cancellationToken).ConfigureAwait(false);
 
-            return EmailSendOutcome.Succeeded($"Correo de “ya quedó” enviado a {to}.");
+            var okNote = kind == "NewQuoteAlert"
+                ? $"Alerta de cotización enviada a {to} (folio {quoteId})."
+                : $"Correo de “ya quedó” enviado a {to}.";
+
+            logger.LogInformation(
+                "SMTP {Kind} ok for quote {QuoteId} → {To}: {Note}",
+                kind,
+                quoteId,
+                to,
+                okNote);
+
+            return EmailSendOutcome.Succeeded(okNote);
         }
         catch (Exception ex)
         {
+            var detail = FormatFullException(ex);
+            var failNote = kind == "NewQuoteAlert"
+                ? $"Alerta de cotización no enviada a {to}: {detail}"
+                : $"Correo no enviado a {to}: {detail}";
+
             logger.LogWarning(
                 ex,
-                "SMTP failed sending Lista email for quote {QuoteId} to {Email}",
-                quote.Id,
-                to);
+                "SMTP {Kind} failed for quote {QuoteId} → {To}: {Note}",
+                kind,
+                quoteId,
+                to,
+                failNote);
 
-            // Full SMTP exception text in emailNote (no credentials). Never fake success.
-            return EmailSendOutcome.Failed($"Correo no enviado a {to}: {FormatFullException(ex)}");
+            // Full SMTP exception text (no credentials). Never fake success.
+            return EmailSendOutcome.Failed(failNote);
         }
     }
 

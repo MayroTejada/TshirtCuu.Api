@@ -9,14 +9,19 @@ namespace TshirtCuu.Presentation.Features.Quotes;
 [Route("api/quotes")]
 public sealed class QuotesController(QuoteService quotes) : ControllerBase
 {
-    /// <summary>Public: submit a new quotation request.</summary>
+    /// <summary>
+    /// Public: submit a new quotation request.
+    /// Also attempts a MailKit alert to Email__NotifyTo (or Email__From); alert failures do not fail the create.
+    /// </summary>
     [HttpPost]
     [AllowAnonymous]
-    public ActionResult<Quotation> Create([FromBody] CreateQuoteRequest request)
+    public async Task<ActionResult<Quotation>> Create(
+        [FromBody] CreateQuoteRequest request,
+        CancellationToken cancellationToken)
     {
         try
         {
-            var created = quotes.Create(request);
+            var created = await quotes.CreateAsync(request, cancellationToken);
             return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
         }
         catch (ArgumentException ex)

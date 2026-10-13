@@ -11,4 +11,12 @@ public interface ICustomerEmailSender
     Task<EmailSendOutcome> TrySendListaReadyAsync(
         Quotation quote,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Alert the shop mailbox (Email__NotifyTo or Email__From) that a new quote arrived.
+    /// Never throws — quote create must succeed even if this fails.
+    /// </summary>
+    Task<EmailSendOutcome> TrySendNewQuoteAlertAsync(
+        Quotation quote,
+        CancellationToken cancellationToken = default);
 }
