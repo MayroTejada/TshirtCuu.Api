@@ -88,7 +88,12 @@ builder.Services.AddAuthorization();
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
-        policy.AllowAnyHeader().AllowAnyMethod().AllowAnyOrigin());
+        policy
+            .WithOrigins(
+                "https://tshirtcuu.web.app",
+                "https://tshirtcuu.firebaseapp.com")
+            .AllowAnyHeader()
+            .AllowAnyMethod());
 });
 
 var app = builder.Build();
