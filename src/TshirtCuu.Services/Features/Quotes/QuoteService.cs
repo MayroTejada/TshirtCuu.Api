@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using TshirtCuu.Domain.Features.Catalog.Repositories;
 using TshirtCuu.Domain.Features.Quotes.Models;
 using TshirtCuu.Domain.Features.Quotes.Repositories;
 using TshirtCuu.Services.Features.Email;
@@ -7,6 +8,7 @@ namespace TshirtCuu.Services.Features.Quotes;
 
 public sealed class QuoteService(
     IQuoteRepository repository,
+    ICatalogRepository catalog,
     ICustomerEmailSender emailSender,
     ILogger<QuoteService> logger)
 {
@@ -15,8 +17,8 @@ public sealed class QuoteService(
     public Quotation? Get(string id) => repository.GetById(id);
 
     /// <summary>
-    /// Persists the quote first. Then attempts a shop-inbox alert email;
-    /// alert failures are logged and never fail the create.
+    /// Persists the quote first. Then emails the shop alert and a customer receipt;
+    /// email failures are logged and never fail the create.
     /// </summary>
     public async Task<Quotation> CreateAsync(
         CreateQuoteRequest request,
@@ -48,25 +50,60 @@ public sealed class QuoteService(
 
         var saved = repository.Add(quotation);
 
-        // Alert must not undo a successful save. Outcome is only for logs.
+        int? estimatedTotal = null;
         try
         {
-            var outcome = await emailSender
-                .TrySendNewQuoteAlertAsync(saved, cancellationToken)
-                .ConfigureAwait(false);
+            estimatedTotal = QuotePricing.TryEstimateTotalMxn(catalog.GetPricingRules(), saved);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(
+                ex,
+                "Could not load pricing for customer receipt on {QuoteId}; sending without total.",
+                saved.Id);
+        }
 
+        // Emails must not undo a successful save. Outcomes are only for logs.
+        await LogEmailOutcomeAsync(
+                "New-quote alert",
+                saved.Id,
+                () => emailSender.TrySendNewQuoteAlertAsync(saved, cancellationToken))
+            .ConfigureAwait(false);
+
+        await LogEmailOutcomeAsync(
+                "Customer quote receipt",
+                saved.Id,
+                () => emailSender.TrySendCustomerQuoteReceivedAsync(
+                    saved,
+                    estimatedTotal,
+                    cancellationToken))
+            .ConfigureAwait(false);
+
+        return saved;
+    }
+
+    private async Task LogEmailOutcomeAsync(
+        string label,
+        string quoteId,
+        Func<Task<EmailSendOutcome>> send)
+    {
+        try
+        {
+            var outcome = await send().ConfigureAwait(false);
             if (outcome.Sent)
             {
                 logger.LogInformation(
-                    "New-quote alert for {QuoteId}: sent. {Note}",
-                    saved.Id,
+                    "{Label} for {QuoteId}: sent. {Note}",
+                    label,
+                    quoteId,
                     outcome.Note);
             }
             else
             {
                 logger.LogWarning(
-                    "New-quote alert for {QuoteId}: not sent. {Note}",
-                    saved.Id,
+                    "{Label} for {QuoteId}: not sent. {Note}",
+                    label,
+                    quoteId,
                     outcome.Note);
             }
         }
@@ -75,11 +112,10 @@ public sealed class QuoteService(
             // Sender should not throw; belt-and-suspenders so create still returns 201.
             logger.LogError(
                 ex,
-                "New-quote alert for {QuoteId} threw unexpectedly; quote was saved.",
-                saved.Id);
+                "{Label} for {QuoteId} threw unexpectedly; quote was saved.",
+                label,
+                quoteId);
         }
-
-        return saved;
     }
 
     public async Task<UpdateStatusResult> UpdateStatusAsync(

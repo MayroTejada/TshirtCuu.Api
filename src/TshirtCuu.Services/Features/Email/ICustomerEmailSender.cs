@@ -19,4 +19,13 @@ public interface ICustomerEmailSender
     Task<EmailSendOutcome> TrySendNewQuoteAlertAsync(
         Quotation quote,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Email the customer a copy of their submitted quote (folio + shirt lines; total if known).
+    /// Never throws — quote create must succeed even if this fails.
+    /// </summary>
+    Task<EmailSendOutcome> TrySendCustomerQuoteReceivedAsync(
+        Quotation quote,
+        int? estimatedTotalMxn,
+        CancellationToken cancellationToken = default);
 }

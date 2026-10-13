@@ -56,7 +56,12 @@ When an admin sets a quote status to **Lista**, the API emails the customer that
 
 Sending uses **MailKit** (not `System.Net.Mail`). Port **465** uses implicit SSL (`SslOnConnect`); port **587** uses `StartTls`. Azure App Settings stay `Email__*` only — nothing secret in git.
 
-On **POST /api/quotes**, after the quote is saved, the API emails an alert (folio, customer name, email, phone) to `Email__NotifyTo` or `Email__From`. Create always succeeds if the quote saved; alert success/failure is only written to application logs (never faked as success).
+On **POST /api/quotes**, after the quote is saved, the API:
+
+1. Emails an **admin alert** (folio, customer name, email, phone) to `Email__NotifyTo` or `Email__From`.
+2. Emails the **customer** a receipt of their quote (folio; each shirt’s fit, color, size, quantity, front and back; estimated total from pricing rules when available).
+
+Create always succeeds if the quote saved; each mail’s success/failure is only written to application logs (never faked as success).
 
 If `Email__Username`, `Email__Password`, or `Email__From` is missing, **Lista still saves** and the PATCH response reports that mail was not sent (`emailSent: false` + `emailNote` + destination `to`). SMTP failures put the **full exception chain** in `emailNote` and do not fail the status change.
 

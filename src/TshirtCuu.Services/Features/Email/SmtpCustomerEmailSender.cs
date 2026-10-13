@@ -1,3 +1,4 @@
+using System.Text;
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using Microsoft.Extensions.Logging;
@@ -86,6 +87,92 @@ public sealed class SmtpCustomerEmailSender(
             .ConfigureAwait(false);
     }
 
+    public async Task<EmailSendOutcome> TrySendCustomerQuoteReceivedAsync(
+        Quotation quote,
+        int? estimatedTotalMxn,
+        CancellationToken cancellationToken = default)
+    {
+        var email = options.Value;
+        if (!email.IsConfigured)
+        {
+            return EmailSendOutcome.Skipped(
+                "Recibo al cliente no enviado: faltan ajustes Email__Username, Email__Password y/o Email__From.");
+        }
+
+        if (string.IsNullOrWhiteSpace(quote.Email))
+        {
+            return EmailSendOutcome.Skipped(
+                "Recibo al cliente no enviado: la cotización no tiene email de cliente.");
+        }
+
+        var to = quote.Email.Trim();
+        var fromName = string.IsNullOrWhiteSpace(email.FromName) ? "T-SHIRTCUU" : email.FromName.Trim();
+        var subject = $"Recibimos tu cotización {quote.Id} · {fromName}";
+        var body = BuildCustomerQuoteBody(quote, estimatedTotalMxn, fromName);
+
+        return await SendAsync(
+                to,
+                subject,
+                body,
+                fromName,
+                quote.Id,
+                kind: "CustomerQuoteReceived",
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    internal static string BuildCustomerQuoteBody(
+        Quotation quote,
+        int? estimatedTotalMxn,
+        string fromName)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"Hola {quote.CustomerName.Trim()},");
+        sb.AppendLine();
+        sb.AppendLine($"Recibimos tu cotización {quote.Id}.");
+        sb.AppendLine();
+
+        var i = 1;
+        foreach (var shirt in quote.Shirts)
+        {
+            sb.AppendLine($"Camisa {i}:");
+            sb.AppendLine($"- Corte: {shirt.Fit}");
+            sb.AppendLine($"- Color: {shirt.ColorName}");
+            sb.AppendLine($"- Talla: {shirt.SizeLabel}");
+            sb.AppendLine($"- Cantidad: {Math.Max(1, shirt.Quantity)}");
+            sb.AppendLine($"- Frente: {DescribeSide(shirt.FrontSource, shirt.FrontLabel)}");
+            sb.AppendLine($"- Espalda: {DescribeSide(shirt.BackSource, shirt.BackLabel)}");
+            sb.AppendLine();
+            i++;
+        }
+
+        if (estimatedTotalMxn is int total)
+            sb.AppendLine($"Total estimado: ${total:N0} MXN");
+        else
+            sb.AppendLine("Total estimado: te lo confirmamos al contactarte.");
+
+        sb.AppendLine();
+        sb.AppendLine("Pronto te escribimos con la cotización. También revisa correo no deseado.");
+        sb.AppendLine();
+        sb.AppendLine($"— {fromName}");
+        return sb.ToString();
+    }
+
+    private static string DescribeSide(ArtworkSource source, string? label)
+    {
+        var trimmed = label?.Trim();
+        return source switch
+        {
+            ArtworkSource.Catalog => string.IsNullOrEmpty(trimmed)
+                ? "Catálogo"
+                : $"Catálogo · {trimmed}",
+            ArtworkSource.Custom => string.IsNullOrEmpty(trimmed)
+                ? "Personalizado"
+                : $"Personalizado · {trimmed}",
+            _ => "Sin diseño"
+        };
+    }
+
     private async Task<EmailSendOutcome> SendAsync(
         string to,
         string subject,
@@ -119,9 +206,12 @@ public sealed class SmtpCustomerEmailSender(
             await client.SendAsync(message, cancellationToken).ConfigureAwait(false);
             await client.DisconnectAsync(true, cancellationToken).ConfigureAwait(false);
 
-            var okNote = kind == "NewQuoteAlert"
-                ? $"Alerta de cotización enviada a {to} (folio {quoteId})."
-                : $"Correo de “ya quedó” enviado a {to}.";
+            var okNote = kind switch
+            {
+                "NewQuoteAlert" => $"Alerta de cotización enviada a {to} (folio {quoteId}).",
+                "CustomerQuoteReceived" => $"Recibo de cotización enviado a {to} (folio {quoteId}).",
+                _ => $"Correo de “ya quedó” enviado a {to}."
+            };
 
             logger.LogInformation(
                 "SMTP {Kind} ok for quote {QuoteId} → {To}: {Note}",
@@ -135,9 +225,12 @@ public sealed class SmtpCustomerEmailSender(
         catch (Exception ex)
         {
             var detail = FormatFullException(ex);
-            var failNote = kind == "NewQuoteAlert"
-                ? $"Alerta de cotización no enviada a {to}: {detail}"
-                : $"Correo no enviado a {to}: {detail}";
+            var failNote = kind switch
+            {
+                "NewQuoteAlert" => $"Alerta de cotización no enviada a {to}: {detail}",
+                "CustomerQuoteReceived" => $"Recibo de cotización no enviado a {to}: {detail}",
+                _ => $"Correo no enviado a {to}: {detail}"
+            };
 
             logger.LogWarning(
                 ex,
