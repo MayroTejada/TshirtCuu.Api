@@ -53,7 +53,9 @@ When an admin sets a quote status to **Lista**, the API emails the customer that
 | `Email__From` | _(empty)_ | From address (usually same as username) |
 | `Email__FromName` | `T-SHIRTCUU` | Display name |
 
-If `Email__Username`, `Email__Password`, or `Email__From` is missing, **Lista still saves** and the PATCH response reports that mail was not sent (`emailSent: false` + `emailNote`). SMTP errors also do not fail the status change.
+If `Email__Username`, `Email__Password`, or `Email__From` is missing, **Lista still saves** and the PATCH response reports that mail was not sent (`emailSent: false` + `emailNote` + destination `to`). SMTP errors also do not fail the status change — the response includes the real error text.
+
+Admin resend (same SMTP path, no status change): `POST /api/quotes/{id}/lista-email` → `{ emailSent, emailNote, to }`.
 
 ```bash
 export Email__Host=smtp.zoho.com

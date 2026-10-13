@@ -41,8 +41,8 @@ public sealed class QuotesController(QuoteService quotes) : ControllerBase
 
     /// <summary>
     /// Admin: update quotation status (Nueva | En revisión | Respondida | Lista | Finalizada | Cancelada).
-    /// When status is Lista, attempts Zoho SMTP “ya quedó” email from Email__* settings.
-    /// Missing SMTP config or send errors do not fail the status save.
+    /// When status is Lista, attempts Zoho SMTP “ya quedó” email from Email__* settings
+    /// (same send path as POST …/lista-email). Missing SMTP or send errors do not fail the status save.
     /// </summary>
     [HttpPatch("{id}/status")]
     [Authorize(Roles = "Admin")]
@@ -63,12 +63,34 @@ public sealed class QuotesController(QuoteService quotes) : ControllerBase
             return Ok(new UpdateStatusResponse(
                 result.Status!,
                 result.EmailSent,
-                result.EmailNote));
+                result.EmailNote,
+                result.To));
         }
         catch (ArgumentException ex)
         {
             return BadRequest(new { error = ex.Message });
         }
+    }
+
+    /// <summary>
+    /// Admin: resend the Lista / “ya quedó” email to the quote’s customer address
+    /// via the same Zoho SMTP path as Marcar lista. Does not change status.
+    /// Returns destination + real send result (never fakes success).
+    /// </summary>
+    [HttpPost("{id}/lista-email")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> ResendListaEmail(
+        string id,
+        CancellationToken cancellationToken)
+    {
+        var result = await quotes.ResendListaEmailAsync(id, cancellationToken);
+        if (!result.Found)
+            return NotFound();
+
+        return Ok(new ListaEmailResponse(
+            result.EmailSent,
+            result.EmailNote,
+            result.To));
     }
 
     /// <summary>
@@ -96,6 +118,12 @@ public sealed class QuotesController(QuoteService quotes) : ControllerBase
 
 public sealed record UpdateStatusRequest(string Status);
 
-public sealed record UpdateStatusResponse(string Status, bool EmailSent, string? EmailNote);
+public sealed record UpdateStatusResponse(
+    string Status,
+    bool EmailSent,
+    string? EmailNote,
+    string? To);
+
+public sealed record ListaEmailResponse(bool EmailSent, string? EmailNote, string? To);
 
 public sealed record SaveReplyRequest(string CustomerReply);

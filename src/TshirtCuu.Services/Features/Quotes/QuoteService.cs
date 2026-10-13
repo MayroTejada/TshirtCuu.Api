@@ -66,14 +66,42 @@ public sealed class QuoteService(
             return UpdateStatusResult.Saved(
                 normalized,
                 emailSent: false,
-                emailNote: "Correo no enviado: no se pudo leer la cotización tras guardar Lista.");
+                emailNote:
+                    "Correo no enviado: no se pudo leer la cotización tras guardar Lista. " +
+                    "El estado Lista sí se guardó.",
+                to: null);
         }
 
+        var to = string.IsNullOrWhiteSpace(quote.Email) ? null : quote.Email.Trim();
         var outcome = await emailSender
             .TrySendListaReadyAsync(quote, cancellationToken)
             .ConfigureAwait(false);
 
-        return UpdateStatusResult.Saved(normalized, outcome.Sent, outcome.Note);
+        var note = outcome.Note;
+        if (!outcome.Sent)
+            note = $"{outcome.Note} El estado Lista sí se guardó.";
+
+        return UpdateStatusResult.Saved(normalized, outcome.Sent, note, to);
+    }
+
+    /// <summary>
+    /// Resend the same Lista / “ya quedó” email to the quote’s customer address
+    /// (same Zoho SMTP path as Marcar lista). Does not change status.
+    /// </summary>
+    public async Task<ListaEmailResult> ResendListaEmailAsync(
+        string id,
+        CancellationToken cancellationToken = default)
+    {
+        var quote = repository.GetById(id);
+        if (quote is null)
+            return ListaEmailResult.NotFound();
+
+        var to = string.IsNullOrWhiteSpace(quote.Email) ? null : quote.Email.Trim();
+        var outcome = await emailSender
+            .TrySendListaReadyAsync(quote, cancellationToken)
+            .ConfigureAwait(false);
+
+        return ListaEmailResult.FromOutcome(outcome.Sent, outcome.Note, to);
     }
 
     public Quotation? SaveReply(string id, string customerReply)
