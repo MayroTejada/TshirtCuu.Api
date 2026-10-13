@@ -39,17 +39,31 @@ public sealed class QuotesController(QuoteService quotes) : ControllerBase
         return quote is null ? NotFound() : Ok(quote);
     }
 
-    /// <summary>Admin: update quotation status (Nueva | En revisión | Respondida | Lista | Finalizada | Cancelada).</summary>
+    /// <summary>
+    /// Admin: update quotation status (Nueva | En revisión | Respondida | Lista | Finalizada | Cancelada).
+    /// When status is Lista, attempts Zoho SMTP “ya quedó” email from Email__* settings.
+    /// Missing SMTP config or send errors do not fail the status save.
+    /// </summary>
     [HttpPatch("{id}/status")]
     [Authorize(Roles = "Admin")]
-    public IActionResult UpdateStatus(string id, [FromBody] UpdateStatusRequest request)
+    public async Task<IActionResult> UpdateStatus(
+        string id,
+        [FromBody] UpdateStatusRequest request,
+        CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.Status))
             return BadRequest(new { error = "Status is required." });
 
         try
         {
-            return quotes.UpdateStatus(id, request.Status) ? NoContent() : NotFound();
+            var result = await quotes.UpdateStatusAsync(id, request.Status, cancellationToken);
+            if (!result.Found)
+                return NotFound();
+
+            return Ok(new UpdateStatusResponse(
+                result.Status!,
+                result.EmailSent,
+                result.EmailNote));
         }
         catch (ArgumentException ex)
         {
@@ -81,5 +95,7 @@ public sealed class QuotesController(QuoteService quotes) : ControllerBase
 }
 
 public sealed record UpdateStatusRequest(string Status);
+
+public sealed record UpdateStatusResponse(string Status, bool EmailSent, string? EmailNote);
 
 public sealed record SaveReplyRequest(string CustomerReply);

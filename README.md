@@ -40,6 +40,30 @@ dotnet user-secrets set "Jwt:SigningKey" "your-local-dev-key-at-least-32-chars"
 
 `appsettings.json` leaves `ConnectionStrings:TshirtCuu` empty on purpose. `appsettings.Development.json` has a **dev-only JWT signing key** and **no** database password.
 
+## Email (Zoho SMTP — Lista / “ya quedó”)
+
+When an admin sets a quote status to **Lista**, the API emails the customer that the shirt is ready. SMTP is read only from configuration / environment (nothing secret in git).
+
+| App Setting / env var | Default | Notes |
+|----------------------|---------|--------|
+| `Email__Host` | `smtp.zoho.com` | Zoho SMTP host |
+| `Email__Port` | `465` | SSL |
+| `Email__Username` | _(empty)_ | Zoho mailbox login |
+| `Email__Password` | _(empty)_ | Zoho app password / mailbox password |
+| `Email__From` | _(empty)_ | From address (usually same as username) |
+| `Email__FromName` | `T-SHIRTCUU` | Display name |
+
+If `Email__Username`, `Email__Password`, or `Email__From` is missing, **Lista still saves** and the PATCH response reports that mail was not sent (`emailSent: false` + `emailNote`). SMTP errors also do not fail the status change.
+
+```bash
+export Email__Host=smtp.zoho.com
+export Email__Port=465
+export Email__Username='orders@yourdomain.com'
+export Email__Password='<secret>'
+export Email__From='orders@yourdomain.com'
+export Email__FromName='T-SHIRTCUU'
+```
+
 ## Run locally
 
 ```bash

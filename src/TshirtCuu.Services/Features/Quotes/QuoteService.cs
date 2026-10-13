@@ -1,9 +1,12 @@
 using TshirtCuu.Domain.Features.Quotes.Models;
 using TshirtCuu.Domain.Features.Quotes.Repositories;
+using TshirtCuu.Services.Features.Email;
 
 namespace TshirtCuu.Services.Features.Quotes;
 
-public sealed class QuoteService(IQuoteRepository repository)
+public sealed class QuoteService(
+    IQuoteRepository repository,
+    ICustomerEmailSender emailSender)
 {
     public IReadOnlyList<Quotation> List() => repository.GetAll();
 
@@ -38,7 +41,10 @@ public sealed class QuoteService(IQuoteRepository repository)
         return repository.Add(quotation);
     }
 
-    public bool UpdateStatus(string id, string status)
+    public async Task<UpdateStatusResult> UpdateStatusAsync(
+        string id,
+        string status,
+        CancellationToken cancellationToken = default)
     {
         var normalized = status.Trim();
         if (!Quotation.AllowedStatuses.Contains(normalized, StringComparer.Ordinal))
@@ -47,7 +53,27 @@ public sealed class QuoteService(IQuoteRepository repository)
                 "Status must be one of: Nueva, En revisión, Respondida, Lista, Finalizada, Cancelada.");
         }
 
-        return repository.UpdateStatus(id, normalized);
+        if (!repository.UpdateStatus(id, normalized))
+            return UpdateStatusResult.NotFound();
+
+        if (!string.Equals(normalized, "Lista", StringComparison.Ordinal))
+            return UpdateStatusResult.Saved(normalized);
+
+        var quote = repository.GetById(id);
+        if (quote is null)
+        {
+            // Status row was updated; email cannot run without the quote payload.
+            return UpdateStatusResult.Saved(
+                normalized,
+                emailSent: false,
+                emailNote: "Correo no enviado: no se pudo leer la cotización tras guardar Lista.");
+        }
+
+        var outcome = await emailSender
+            .TrySendListaReadyAsync(quote, cancellationToken)
+            .ConfigureAwait(false);
+
+        return UpdateStatusResult.Saved(normalized, outcome.Sent, outcome.Note);
     }
 
     public Quotation? SaveReply(string id, string customerReply)

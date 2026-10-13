@@ -7,6 +7,7 @@ using TshirtCuu.Domain.Features.Catalog.Repositories;
 using TshirtCuu.Domain.Features.Quotes.Repositories;
 using TshirtCuu.Services.Features.Admin;
 using TshirtCuu.Services.Features.Catalog;
+using TshirtCuu.Services.Features.Email;
 using TshirtCuu.Services.Features.Quotes;
 using TshirtCuu.Services.Persistence;
 
@@ -19,6 +20,7 @@ public static class DependencyInjection
         IConfiguration configuration)
     {
         services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
+        services.Configure<EmailOptions>(configuration.GetSection(EmailOptions.SectionName));
 
         // Validate presence only — do not open a SQL connection at startup.
         var connectionString = configuration.GetConnectionString(SqlConnectionFactory.ConnectionName);
@@ -40,6 +42,7 @@ public static class DependencyInjection
 
         services.AddScoped<CatalogService>();
         services.AddScoped<QuoteService>();
+        services.AddSingleton<ICustomerEmailSender, SmtpCustomerEmailSender>();
         services.AddSingleton<JwtTokenService>();
         services.AddScoped<AdminAuthService>();
         services.AddSingleton<IPasswordHasher<AdminUser>, PasswordHasher<AdminUser>>();
