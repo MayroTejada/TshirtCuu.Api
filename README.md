@@ -47,13 +47,15 @@ When an admin sets a quote status to **Lista**, the API emails the customer that
 | App Setting / env var | Default | Notes |
 |----------------------|---------|--------|
 | `Email__Host` | `smtp.zoho.com` | Zoho SMTP host |
-| `Email__Port` | `465` | SSL |
+| `Email__Port` | `465` | `465` → MailKit `SslOnConnect`; `587` → `StartTls` |
 | `Email__Username` | _(empty)_ | Zoho mailbox login |
 | `Email__Password` | _(empty)_ | Zoho app password / mailbox password |
 | `Email__From` | _(empty)_ | From address (usually same as username) |
 | `Email__FromName` | `T-SHIRTCUU` | Display name |
 
-If `Email__Username`, `Email__Password`, or `Email__From` is missing, **Lista still saves** and the PATCH response reports that mail was not sent (`emailSent: false` + `emailNote` + destination `to`). SMTP errors also do not fail the status change — the response includes the real error text.
+Sending uses **MailKit** (not `System.Net.Mail`). Port **465** uses implicit SSL (`SslOnConnect`); port **587** uses `StartTls`. Azure App Settings stay `Email__*` only — nothing secret in git.
+
+If `Email__Username`, `Email__Password`, or `Email__From` is missing, **Lista still saves** and the PATCH response reports that mail was not sent (`emailSent: false` + `emailNote` + destination `to`). SMTP failures put the **full exception chain** in `emailNote` and do not fail the status change.
 
 Admin resend (same SMTP path, no status change): `POST /api/quotes/{id}/lista-email` → `{ emailSent, emailNote, to }`.
 

@@ -1,7 +1,8 @@
-using System.Net;
-using System.Net.Mail;
+using MailKit.Net.Smtp;
+using MailKit.Security;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using MimeKit;
 using TshirtCuu.Domain.Features.Quotes.Models;
 
 namespace TshirtCuu.Services.Features.Email;
@@ -38,25 +39,25 @@ public sealed class SmtpCustomerEmailSender(
 
         try
         {
-            using var message = new MailMessage
-            {
-                From = new MailAddress(email.From.Trim(), fromName),
-                Subject = subject,
-                Body = body,
-                IsBodyHtml = false
-            };
-            message.To.Add(to);
+            var message = new MimeMessage();
+            message.From.Add(new MailboxAddress(fromName, email.From.Trim()));
+            message.To.Add(MailboxAddress.Parse(to));
+            message.Subject = subject;
+            message.Body = new TextPart("plain") { Text = body };
 
-            using var client = new SmtpClient(email.Host.Trim(), email.Port)
-            {
-                EnableSsl = true,
-                DeliveryMethod = SmtpDeliveryMethod.Network,
-                UseDefaultCredentials = false,
-                Credentials = new NetworkCredential(email.Username.Trim(), email.Password)
-            };
+            using var client = new SmtpClient();
+            var socketOptions = SecureSocketOptionsForPort(email.Port);
 
-            cancellationToken.ThrowIfCancellationRequested();
-            await client.SendMailAsync(message, cancellationToken).ConfigureAwait(false);
+            await client
+                .ConnectAsync(email.Host.Trim(), email.Port, socketOptions, cancellationToken)
+                .ConfigureAwait(false);
+
+            await client
+                .AuthenticateAsync(email.Username.Trim(), email.Password, cancellationToken)
+                .ConfigureAwait(false);
+
+            await client.SendAsync(message, cancellationToken).ConfigureAwait(false);
+            await client.DisconnectAsync(true, cancellationToken).ConfigureAwait(false);
 
             return EmailSendOutcome.Succeeded($"Correo de “ya quedó” enviado a {to}.");
         }
@@ -68,21 +69,34 @@ public sealed class SmtpCustomerEmailSender(
                 quote.Id,
                 to);
 
-            // Surface the real SMTP/error text (no credentials). Do not fake success.
-            var detail = SanitizeError(ex);
-            return EmailSendOutcome.Failed($"Correo no enviado a {to}: {detail}");
+            // Full SMTP exception text in emailNote (no credentials). Never fake success.
+            return EmailSendOutcome.Failed($"Correo no enviado a {to}: {FormatFullException(ex)}");
         }
     }
 
-    private static string SanitizeError(Exception ex)
-    {
-        var msg = ex.GetBaseException().Message?.Trim() ?? ex.Message;
-        if (string.IsNullOrWhiteSpace(msg))
-            return "error SMTP desconocido.";
+    /// <summary>
+    /// Zoho / common SMTP: 465 = implicit SSL, 587 = STARTTLS.
+    /// System.Net.Mail EnableSsl only does STARTTLS and breaks on 465.
+    /// </summary>
+    internal static SecureSocketOptions SecureSocketOptionsForPort(int port) =>
+        port switch
+        {
+            465 => SecureSocketOptions.SslOnConnect,
+            587 => SecureSocketOptions.StartTls,
+            _ => SecureSocketOptions.Auto
+        };
 
-        // Keep it short for UI; never invent a success.
-        if (msg.Length > 240)
-            msg = msg[..240] + "…";
-        return msg;
+    /// <summary>Full exception chain for emailNote (messages only — no secrets).</summary>
+    internal static string FormatFullException(Exception ex)
+    {
+        var parts = new List<string>();
+        for (var cur = ex; cur != null; cur = cur.InnerException)
+        {
+            var type = cur.GetType().Name;
+            var msg = (cur.Message ?? string.Empty).Trim();
+            parts.Add(string.IsNullOrEmpty(msg) ? type : $"{type}: {msg}");
+        }
+
+        return parts.Count == 0 ? "error SMTP desconocido." : string.Join(" → ", parts);
     }
 }
