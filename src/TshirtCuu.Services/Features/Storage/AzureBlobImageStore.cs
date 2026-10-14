@@ -69,6 +69,17 @@ public sealed class AzureBlobImageStore(
         return new ImageDownloadResult(download.Value.Content, contentType, fileName);
     }
 
+    public async Task DeleteAsync(string blobPath, CancellationToken cancellationToken = default)
+    {
+        if (!_options.IsConfigured) return;
+        var path = NormalizePath(blobPath);
+        if (path is null) return;
+
+        var container = await GetContainerAsync(cancellationToken).ConfigureAwait(false);
+        var blob = container.GetBlobClient(path);
+        await blob.DeleteIfExistsAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
     private void EnsureConfigured()
     {
         if (_options.IsConfigured) return;

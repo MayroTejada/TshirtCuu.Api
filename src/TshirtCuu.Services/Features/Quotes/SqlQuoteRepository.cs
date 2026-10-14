@@ -128,6 +128,32 @@ public sealed class SqlQuoteRepository(ISqlConnectionFactory connections) : IQuo
             commandType: CommandType.StoredProcedure);
     }
 
+    public bool UpdateShirtImagePaths(
+        string quotationId,
+        string shirtId,
+        string? frontImageBlobPath,
+        string? backImageBlobPath)
+    {
+        using var db = connections.Create();
+        // Columns already exist (TShirtMigration ImageBlobPaths). Idempotent path update
+        // after quote create — no new migration required for this write.
+        var rows = db.Execute(
+            """
+            UPDATE dbo.ShirtLines
+            SET FrontImageBlobPath = COALESCE(@FrontImageBlobPath, FrontImageBlobPath),
+                BackImageBlobPath = COALESCE(@BackImageBlobPath, BackImageBlobPath)
+            WHERE Id = @ShirtId AND QuotationId = @QuotationId
+            """,
+            new
+            {
+                QuotationId = quotationId,
+                ShirtId = shirtId,
+                FrontImageBlobPath = frontImageBlobPath,
+                BackImageBlobPath = backImageBlobPath
+            });
+        return rows > 0;
+    }
+
     private static void AttachShirts(IList<Quotation> quotes, IList<ShirtLineRow> rows)
     {
         var byQuote = rows.GroupBy(r => r.QuotationId).ToDictionary(g => g.Key, g => g.ToList());

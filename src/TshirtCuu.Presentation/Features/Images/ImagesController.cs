@@ -9,15 +9,15 @@ namespace TshirtCuu.Presentation.Features.Images;
 public sealed class ImagesController(ImageStorageService images) : ControllerBase
 {
     /// <summary>
-    /// Upload an image into the private <c>imagenes</c> container.
-    /// <paramref name="kind"/>: <c>artwork</c> (anonymous) or <c>catalog</c> (admin).
+    /// Admin catalog image upload into the private <c>imagenes</c> container.
+    /// Customer artwork is not accepted here — it is stored only when POST /api/quotes succeeds.
     /// </summary>
     [HttpPost]
-    [AllowAnonymous]
+    [Authorize(Roles = "Admin")]
     [RequestSizeLimit(20_000_000)]
     public async Task<IActionResult> Upload(
         [FromForm] IFormFile? file,
-        [FromQuery] string kind = "artwork",
+        [FromQuery] string kind = "catalog",
         CancellationToken cancellationToken = default)
     {
         if (!images.IsConfigured)
@@ -30,15 +30,16 @@ public sealed class ImagesController(ImageStorageService images) : ControllerBas
             });
         }
 
-        var normalized = (kind ?? "artwork").Trim().ToLowerInvariant();
-        if (normalized is not ("artwork" or "catalog"))
-            return BadRequest(new { error = "kind must be 'artwork' or 'catalog'." });
-
-        if (normalized == "catalog" && !(User.Identity?.IsAuthenticated ?? false))
-            return Unauthorized(new { error = "Admin login required for catalog uploads." });
-
-        if (normalized == "catalog" && !User.IsInRole("Admin"))
-            return Forbid();
+        var normalized = (kind ?? "catalog").Trim().ToLowerInvariant();
+        if (normalized != "catalog")
+        {
+            return BadRequest(new
+            {
+                error =
+                    "Only kind=catalog is accepted on this endpoint. " +
+                    "Customer artwork is uploaded when POST /api/quotes succeeds."
+            });
+        }
 
         if (file is null || file.Length == 0)
             return BadRequest(new { error = "file is required." });
@@ -49,11 +50,9 @@ public sealed class ImagesController(ImageStorageService images) : ControllerBas
         try
         {
             await using var stream = file.OpenReadStream();
-            var result = normalized == "catalog"
-                ? await images.UploadCatalogAsync(stream, file.ContentType, file.FileName, cancellationToken)
-                    .ConfigureAwait(false)
-                : await images.UploadArtworkAsync(stream, file.ContentType, file.FileName, cancellationToken)
-                    .ConfigureAwait(false);
+            var result = await images
+                .UploadCatalogAsync(stream, file.ContentType, file.FileName, cancellationToken)
+                .ConfigureAwait(false);
 
             return Ok(new
             {

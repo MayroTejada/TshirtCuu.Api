@@ -11,10 +11,13 @@ public sealed class QuotesController(QuoteService quotes) : ControllerBase
 {
     /// <summary>
     /// Public: submit a new quotation request.
+    /// Custom artwork base64 on shirt lines is stored in private Azure blobs only after the quote is saved.
     /// Also attempts a MailKit alert to Email__NotifyTo (or Email__From); alert failures do not fail the create.
     /// </summary>
     [HttpPost]
     [AllowAnonymous]
+    [RequestSizeLimit(40_000_000)]
+    [RequestFormLimits(MultipartBodyLengthLimit = 40_000_000)]
     public async Task<ActionResult<Quotation>> Create(
         [FromBody] CreateQuoteRequest request,
         CancellationToken cancellationToken)
