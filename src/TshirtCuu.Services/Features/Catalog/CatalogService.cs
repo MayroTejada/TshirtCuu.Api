@@ -43,7 +43,8 @@ public sealed class CatalogService(ICatalogRepository repository)
                 CategoryId = design.CategoryId,
                 Tagline = design.Tagline,
                 AccentHex = design.AccentHex,
-                InkHex = design.InkHex
+                InkHex = design.InkHex,
+                ImageBlobPath = design.ImageBlobPath
             };
         }
 

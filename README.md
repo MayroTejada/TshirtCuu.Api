@@ -77,6 +77,30 @@ export Email__FromName='T-SHIRTCUU'
 export Email__NotifyTo='orders@yourdomain.com'   # optional; defaults to Email__From
 ```
 
+## Azure Blob Storage (private `imagenes`)
+
+Catalog uploads and customer artwork go to a **private** blob container named `imagenes` (created on first upload if missing). Clients never use a public blob URL — reads and admin PNG download stream through `GET /api/images/{blobPath}`.
+
+| App Setting / env var | Notes |
+|----------------------|--------|
+| `AzureStorage__ConnectionString` | Storage account connection string (never commit) |
+| `AzureStorage__ContainerName` | Optional; default `imagenes` |
+
+If `AzureStorage__ConnectionString` is missing, the API **still starts**. Upload endpoints return **503** with a clear error. Quote create without blob paths keeps working.
+
+```bash
+export AzureStorage__ConnectionString='DefaultEndpointsProtocol=https;AccountName=...;AccountKey=...;EndpointSuffix=core.windows.net'
+```
+
+Endpoints:
+
+- `POST /api/images?kind=artwork` — customer artwork (anonymous multipart `file`)
+- `POST /api/images?kind=catalog` — admin only
+- `POST /api/catalog/designs/upload` — admin multipart (`name`, `categoryId`, `file`) → blob + design row
+- `GET /api/images/{*blobPath}` — stream bytes through the API
+
+Blob paths are stored on `Designs.ImageBlobPath` and `ShirtLines.FrontImageBlobPath` / `BackImageBlobPath` (see TShirtMigration).
+
 ## Run locally
 
 ```bash

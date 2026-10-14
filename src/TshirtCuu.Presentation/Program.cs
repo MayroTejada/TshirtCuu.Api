@@ -117,6 +117,7 @@ app.MapGet("/", () => Results.Ok(new
     docs = "/swagger",
     auth = "POST /api/admin/auth/login",
     persistence = "Azure SQL stored procedures (TShirtMigration)",
+    images = "Private Azure blob container 'imagenes' via /api/images (AzureStorage__ConnectionString)",
     schemaRepo = "https://github.com/MayroTejada/TShirtMigration"
 }));
 

@@ -203,10 +203,12 @@ public sealed class QuoteService(
         FrontSource = s.FrontSource,
         FrontLabel = s.FrontLabel,
         FrontCatalogId = s.FrontCatalogId,
+        FrontImageBlobPath = s.FrontImageBlobPath,
         FrontPlacement = s.FrontPlacement ?? new ArtPlacement(),
         BackSource = s.BackSource,
         BackLabel = s.BackLabel,
         BackCatalogId = s.BackCatalogId,
+        BackImageBlobPath = s.BackImageBlobPath,
         BackPlacement = s.BackPlacement ?? new ArtPlacement()
     };
 }
@@ -232,9 +234,11 @@ public sealed class CreateShirtLineRequest
     public ArtworkSource FrontSource { get; init; } = ArtworkSource.None;
     public string? FrontLabel { get; init; }
     public string? FrontCatalogId { get; init; }
+    public string? FrontImageBlobPath { get; init; }
     public ArtPlacement? FrontPlacement { get; init; }
     public ArtworkSource BackSource { get; init; } = ArtworkSource.None;
     public string? BackLabel { get; init; }
     public string? BackCatalogId { get; init; }
+    public string? BackImageBlobPath { get; init; }
     public ArtPlacement? BackPlacement { get; init; }
 }

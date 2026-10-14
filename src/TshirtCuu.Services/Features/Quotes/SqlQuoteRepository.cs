@@ -73,6 +73,7 @@ public sealed class SqlQuoteRepository(ISqlConnectionFactory connections) : IQuo
                     FrontSource = s.FrontSource.ToString(),
                     s.FrontLabel,
                     s.FrontCatalogId,
+                    s.FrontImageBlobPath,
                     FrontDx = s.FrontPlacement.Dx,
                     FrontDy = s.FrontPlacement.Dy,
                     FrontScale = s.FrontPlacement.ResolvedScaleX,
@@ -80,6 +81,7 @@ public sealed class SqlQuoteRepository(ISqlConnectionFactory connections) : IQuo
                     BackSource = s.BackSource.ToString(),
                     s.BackLabel,
                     s.BackCatalogId,
+                    s.BackImageBlobPath,
                     BackDx = s.BackPlacement.Dx,
                     BackDy = s.BackPlacement.Dy,
                     BackScale = s.BackPlacement.ResolvedScaleX,
@@ -155,6 +157,7 @@ public sealed class SqlQuoteRepository(ISqlConnectionFactory connections) : IQuo
         public string FrontSource { get; init; } = "None";
         public string? FrontLabel { get; init; }
         public string? FrontCatalogId { get; init; }
+        public string? FrontImageBlobPath { get; init; }
         public double FrontDx { get; init; }
         public double FrontDy { get; init; }
         public double FrontScale { get; init; } = 1;
@@ -162,6 +165,7 @@ public sealed class SqlQuoteRepository(ISqlConnectionFactory connections) : IQuo
         public string BackSource { get; init; } = "None";
         public string? BackLabel { get; init; }
         public string? BackCatalogId { get; init; }
+        public string? BackImageBlobPath { get; init; }
         public double BackDx { get; init; }
         public double BackDy { get; init; }
         public double BackScale { get; init; } = 1;
@@ -181,6 +185,7 @@ public sealed class SqlQuoteRepository(ISqlConnectionFactory connections) : IQuo
             FrontSource = Enum.TryParse<ArtworkSource>(FrontSource, true, out var fs) ? fs : ArtworkSource.None,
             FrontLabel = FrontLabel,
             FrontCatalogId = FrontCatalogId,
+            FrontImageBlobPath = FrontImageBlobPath,
             FrontPlacement = new ArtPlacement
             {
                 Dx = FrontDx,
@@ -192,6 +197,7 @@ public sealed class SqlQuoteRepository(ISqlConnectionFactory connections) : IQuo
             BackSource = Enum.TryParse<ArtworkSource>(BackSource, true, out var bs) ? bs : ArtworkSource.None,
             BackLabel = BackLabel,
             BackCatalogId = BackCatalogId,
+            BackImageBlobPath = BackImageBlobPath,
             BackPlacement = new ArtPlacement
             {
                 Dx = BackDx,

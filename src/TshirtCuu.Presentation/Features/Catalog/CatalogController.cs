@@ -2,12 +2,15 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TshirtCuu.Domain.Features.Catalog.Models;
 using TshirtCuu.Services.Features.Catalog;
+using TshirtCuu.Services.Features.Storage;
 
 namespace TshirtCuu.Presentation.Features.Catalog;
 
 [ApiController]
 [Route("api/catalog")]
-public sealed class CatalogController(CatalogService catalog) : ControllerBase
+public sealed class CatalogController(
+    CatalogService catalog,
+    ImageStorageService images) : ControllerBase
 {
     [HttpGet("categories")]
     [AllowAnonymous]
@@ -66,9 +69,67 @@ public sealed class CatalogController(CatalogService catalog) : ControllerBase
             CategoryId = design.CategoryId,
             Tagline = design.Tagline ?? "Stock",
             AccentHex = design.AccentHex,
-            InkHex = design.InkHex
+            InkHex = design.InkHex,
+            ImageBlobPath = design.ImageBlobPath
         });
         return Ok(created);
+    }
+
+    /// <summary>
+    /// Admin catalog upload: stores the image in private Azure blob storage, then inserts the design.
+    /// </summary>
+    [HttpPost("designs/upload")]
+    [Authorize(Roles = "Admin")]
+    [RequestSizeLimit(20_000_000)]
+    public async Task<ActionResult<CatalogDesign>> UploadDesign(
+        [FromForm] string name,
+        [FromForm] string categoryId,
+        [FromForm] IFormFile? file,
+        [FromForm] string? tagline,
+        [FromForm] string? accentHex,
+        [FromForm] string? inkHex,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(categoryId))
+            return BadRequest(new { error = "Name and CategoryId are required." });
+        if (file is null || file.Length == 0)
+            return BadRequest(new { error = "file is required." });
+        if (!file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+            return BadRequest(new { error = "Only image/* uploads are accepted." });
+
+        if (!images.IsConfigured)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+            {
+                error =
+                    "Azure Storage is not configured. Set App Setting AzureStorage__ConnectionString. " +
+                    "The API is running; catalog image upload is unavailable until that setting is set."
+            });
+        }
+
+        try
+        {
+            await using var stream = file.OpenReadStream();
+            var uploaded = await images
+                .UploadCatalogAsync(stream, file.ContentType, file.FileName, cancellationToken)
+                .ConfigureAwait(false);
+
+            var created = catalog.CreateDesign(new CatalogDesign
+            {
+                Id = $"des-{Guid.NewGuid():N}"[..12],
+                Name = name.Trim(),
+                CategoryId = categoryId.Trim(),
+                Tagline = string.IsNullOrWhiteSpace(tagline) ? "Stock · subido por admin" : tagline.Trim(),
+                AccentHex = string.IsNullOrWhiteSpace(accentHex) ? "#B8F34A" : accentHex.Trim(),
+                InkHex = string.IsNullOrWhiteSpace(inkHex) ? "#0E1116" : inkHex.Trim(),
+                ImageBlobPath = uploaded.BlobPath
+            });
+            return Ok(created);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = ex.Message });
+        }
     }
 
     [HttpPut("designs/{id}")]
@@ -82,7 +143,8 @@ public sealed class CatalogController(CatalogService catalog) : ControllerBase
             CategoryId = design.CategoryId,
             Tagline = design.Tagline,
             AccentHex = design.AccentHex,
-            InkHex = design.InkHex
+            InkHex = design.InkHex,
+            ImageBlobPath = design.ImageBlobPath
         };
         return catalog.UpdateDesign(updated) ? NoContent() : NotFound();
     }
