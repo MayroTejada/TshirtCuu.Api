@@ -11,7 +11,8 @@ public sealed class QuotesController(QuoteService quotes) : ControllerBase
 {
     /// <summary>
     /// Public: submit a new quotation request.
-    /// Custom artwork base64 on shirt lines is stored in private Azure blobs only after the quote is saved.
+    /// Custom artwork is stored in private Azure blobs only after this create succeeds
+    /// (base64 on the body and/or follow-up multipart POST …/artwork).
     /// Also attempts a MailKit alert to Email__NotifyTo (or Email__From); alert failures do not fail the create.
     /// </summary>
     [HttpPost]
@@ -31,6 +32,51 @@ public sealed class QuotesController(QuoteService quotes) : ControllerBase
         {
             return BadRequest(new { error = ex.Message });
         }
+    }
+
+    /// <summary>
+    /// Public: attach customer “Subir propio” artwork after the quote was created.
+    /// Uploads to private container <c>imagenes</c> and saves the blob path on the shirt line.
+    /// </summary>
+    [HttpPost("{quoteId}/shirts/{shirtId}/artwork")]
+    [AllowAnonymous]
+    [RequestSizeLimit(20_000_000)]
+    [RequestFormLimits(MultipartBodyLengthLimit = 20_000_000)]
+    public async Task<IActionResult> UploadShirtArtwork(
+        string quoteId,
+        string shirtId,
+        [FromQuery] string side,
+        [FromForm] IFormFile? file,
+        CancellationToken cancellationToken)
+    {
+        if (file is null || file.Length == 0)
+            return BadRequest(new { error = "file is required." });
+
+        await using var stream = file.OpenReadStream();
+        var result = await quotes
+            .AttachShirtArtworkAsync(
+                quoteId,
+                shirtId,
+                side,
+                stream,
+                file.ContentType,
+                file.FileName,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!result.Found) return NotFound(new { error = result.Error });
+        if (result.StatusCode == 400) return BadRequest(new { error = result.Error });
+        if (result.StatusCode >= 500)
+            return StatusCode(result.StatusCode, new { error = result.Error });
+        if (!result.Stored)
+            return StatusCode(result.StatusCode, new { error = result.Error });
+
+        return Ok(new
+        {
+            blobPath = result.BlobPath,
+            side = result.Side,
+            contentType = file.ContentType
+        });
     }
 
     /// <summary>Admin: list all quotations.</summary>

@@ -19,4 +19,10 @@ public sealed class Quotation
     public DateTimeOffset? RepliedAt { get; set; }
 
     public int TotalUnits => Shirts.Sum(s => s.Quantity);
+
+    /// <summary>
+    /// Not persisted — filled on create when customer artwork could not be stored
+    /// (missing AzureStorage__ConnectionString, missing bytes, or upload error).
+    /// </summary>
+    public string? ArtworkUploadNote { get; set; }
 }

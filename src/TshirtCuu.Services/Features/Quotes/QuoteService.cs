@@ -55,11 +55,12 @@ public sealed class QuoteService(
 
         var saved = repository.Add(quotation);
 
-        await AttachCustomerArtworkAsync(saved, request.Shirts, cancellationToken)
+        var artworkNote = await AttachCustomerArtworkAsync(saved, request.Shirts, cancellationToken)
             .ConfigureAwait(false);
 
         // Reload so response includes blob paths when uploads succeeded.
         saved = repository.GetById(saved.Id) ?? saved;
+        saved.ArtworkUploadNote = artworkNote;
 
         int? estimatedTotal = null;
         try
@@ -94,21 +95,102 @@ public sealed class QuoteService(
     }
 
     /// <summary>
-    /// Upload custom front/back images only after the quote exists. Missing Azure Storage
-    /// does not fail the quote — paths stay null.
+    /// Upload one custom shirt side into private <c>imagenes</c> after the quote exists.
+    /// Used by multipart POST /api/quotes/{id}/shirts/{shirtId}/artwork.
     /// </summary>
-    private async Task AttachCustomerArtworkAsync(
+    public async Task<ArtworkAttachResult> AttachShirtArtworkAsync(
+        string quoteId,
+        string shirtId,
+        string side,
+        Stream content,
+        string contentType,
+        string? fileName,
+        CancellationToken cancellationToken = default)
+    {
+        if (!images.IsConfigured)
+        {
+            return ArtworkAttachResult.StorageNotConfigured();
+        }
+
+        var quote = repository.GetById(quoteId);
+        if (quote is null) return ArtworkAttachResult.NotFound();
+
+        var shirt = quote.Shirts.FirstOrDefault(s =>
+            string.Equals(s.Id, shirtId, StringComparison.Ordinal));
+        if (shirt is null) return ArtworkAttachResult.NotFound();
+
+        var normalized = (side ?? "").Trim().ToLowerInvariant();
+        if (normalized is not ("front" or "back"))
+            return ArtworkAttachResult.BadSide();
+
+        if (string.IsNullOrWhiteSpace(contentType) ||
+            !contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        {
+            return ArtworkAttachResult.BadFile("Only image/* uploads are accepted.");
+        }
+
+        try
+        {
+            var uploaded = await images
+                .UploadArtworkAsync(content, contentType, fileName, cancellationToken)
+                .ConfigureAwait(false);
+
+            string? frontPath = normalized == "front" ? uploaded.BlobPath : null;
+            string? backPath = normalized == "back" ? uploaded.BlobPath : null;
+
+            try
+            {
+                repository.UpdateShirtImagePaths(quoteId, shirtId, frontPath, backPath);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(
+                    ex,
+                    "Uploaded {BlobPath} but failed to save path on {QuoteId}/{ShirtId}. " +
+                    "Apply TShirtMigration tables/ImageBlobPaths.sql if columns are missing.",
+                    uploaded.BlobPath,
+                    quoteId,
+                    shirtId);
+                return ArtworkAttachResult.PathSaveFailed(ex.Message);
+            }
+
+            logger.LogInformation(
+                "Stored customer {Side} artwork for {QuoteId}/{ShirtId} at {BlobPath}.",
+                normalized,
+                quoteId,
+                shirtId,
+                uploaded.BlobPath);
+
+            return ArtworkAttachResult.Ok(uploaded.BlobPath, normalized);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return ArtworkAttachResult.Failed(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(
+                ex,
+                "Customer {Side} artwork upload failed for {QuoteId}/{ShirtId}.",
+                normalized,
+                quoteId,
+                shirtId);
+            return ArtworkAttachResult.Failed(ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Upload custom front/back images from create-body base64 only after the quote exists.
+    /// Missing Azure Storage does not fail the quote — paths stay null and a note is returned.
+    /// </summary>
+    private async Task<string?> AttachCustomerArtworkAsync(
         Quotation saved,
         IReadOnlyList<CreateShirtLineRequest> requests,
         CancellationToken cancellationToken)
     {
-        if (!images.IsConfigured)
-        {
-            logger.LogInformation(
-                "Skipping customer artwork upload for {QuoteId}: AzureStorage__ConnectionString not set.",
-                saved.Id);
-            return;
-        }
+        var expected = 0;
+        var stored = 0;
+        var notes = new List<string>();
 
         var byId = requests
             .Where(r => !string.IsNullOrWhiteSpace(r.Id))
@@ -125,11 +207,45 @@ public sealed class QuoteService(
                 req = requests[i];
             if (req is null) continue;
 
+            var wantFront = shirt.FrontSource == ArtworkSource.Custom
+                            || !string.IsNullOrWhiteSpace(req.FrontImageBase64);
+            var wantBack = shirt.BackSource == ArtworkSource.Custom
+                           || !string.IsNullOrWhiteSpace(req.BackImageBase64);
+
+            if (wantFront) expected++;
+            if (wantBack) expected++;
+
+            if (wantFront && string.IsNullOrWhiteSpace(req.FrontImageBase64))
+                notes.Add($"shirt {shirt.Id} front: no image bytes in create body");
+            if (wantBack && string.IsNullOrWhiteSpace(req.BackImageBase64))
+                notes.Add($"shirt {shirt.Id} back: no image bytes in create body");
+        }
+
+        if (expected == 0) return null;
+
+        if (!images.IsConfigured)
+        {
+            var msg =
+                "Azure Storage is not configured. Set App Setting AzureStorage__ConnectionString " +
+                "(or ConnectionStrings__AzureStorage). Quote was saved without artwork blobs.";
+            logger.LogWarning("Artwork skip for {QuoteId}: {Msg}", saved.Id, msg);
+            return msg;
+        }
+
+        for (var i = 0; i < saved.Shirts.Count; i++)
+        {
+            var shirt = saved.Shirts[i];
+            CreateShirtLineRequest? req = null;
+            if (byId.TryGetValue(shirt.Id, out var matched))
+                req = matched;
+            else if (i < requests.Count)
+                req = requests[i];
+            if (req is null) continue;
+
             string? frontPath = null;
             string? backPath = null;
 
-            if (shirt.FrontSource == ArtworkSource.Custom &&
-                !string.IsNullOrWhiteSpace(req.FrontImageBase64))
+            if (!string.IsNullOrWhiteSpace(req.FrontImageBase64))
             {
                 frontPath = await TryUploadArtworkAsync(
                         saved.Id,
@@ -140,10 +256,11 @@ public sealed class QuoteService(
                         req.FrontImageFileName ?? req.FrontLabel,
                         cancellationToken)
                     .ConfigureAwait(false);
+                if (frontPath is not null) stored++;
+                else notes.Add($"shirt {shirt.Id} front: upload failed");
             }
 
-            if (shirt.BackSource == ArtworkSource.Custom &&
-                !string.IsNullOrWhiteSpace(req.BackImageBase64))
+            if (!string.IsNullOrWhiteSpace(req.BackImageBase64))
             {
                 backPath = await TryUploadArtworkAsync(
                         saved.Id,
@@ -154,14 +271,34 @@ public sealed class QuoteService(
                         req.BackImageFileName ?? req.BackLabel,
                         cancellationToken)
                     .ConfigureAwait(false);
+                if (backPath is not null) stored++;
+                else notes.Add($"shirt {shirt.Id} back: upload failed");
             }
 
             if (frontPath is null && backPath is null) continue;
 
-            repository.UpdateShirtImagePaths(saved.Id, shirt.Id, frontPath, backPath);
-            shirt.FrontImageBlobPath = frontPath;
-            shirt.BackImageBlobPath = backPath;
+            try
+            {
+                repository.UpdateShirtImagePaths(saved.Id, shirt.Id, frontPath, backPath);
+                shirt.FrontImageBlobPath = frontPath ?? shirt.FrontImageBlobPath;
+                shirt.BackImageBlobPath = backPath ?? shirt.BackImageBlobPath;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(
+                    ex,
+                    "Artwork uploaded for {QuoteId}/{ShirtId} but path save failed. " +
+                    "Apply TShirtMigration tables/ImageBlobPaths.sql if columns are missing.",
+                    saved.Id,
+                    shirt.Id);
+                notes.Add(
+                    $"shirt {shirt.Id}: blob uploaded but path not saved ({ex.Message}). " +
+                    "Run TShirtMigration ImageBlobPaths.sql.");
+            }
         }
+
+        if (stored == expected && notes.Count == 0) return null;
+        return $"Artwork stored {stored}/{expected}. {string.Join("; ", notes)}".Trim();
     }
 
     private async Task<string?> TryUploadArtworkAsync(
