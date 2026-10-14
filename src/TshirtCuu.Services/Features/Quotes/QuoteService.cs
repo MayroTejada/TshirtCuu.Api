@@ -44,6 +44,7 @@ public sealed class QuoteService(
         var id = repository.NextQuoteId();
         // Blob paths are not accepted from the client on create — artwork is uploaded
         // only after this insert succeeds.
+        // Shirt-line PKs are global: never reuse client ids (retries / cart reuse / dup lines).
         var quotation = new Quotation
         {
             Id = id,
@@ -52,7 +53,7 @@ public sealed class QuoteService(
             Phone = request.Phone.Trim(),
             Status = "Nueva",
             CreatedAt = DateTimeOffset.UtcNow,
-            Shirts = request.Shirts.Select(s => MapShirt(s, id)).ToList()
+            Shirts = request.Shirts.Select((s, i) => MapShirt(s, id, i)).ToList()
         };
 
         var saved = repository.Add(quotation);
@@ -487,9 +488,17 @@ public sealed class QuoteService(
         return repository.SaveReply(id, customerReply.Trim());
     }
 
-    private static ShirtLine MapShirt(CreateShirtLineRequest s, string quotationId) => new()
+    /// <summary>
+    /// Client shirt ids are advisory only. PK_ShirtLines is global, so every insert
+    /// gets a fresh id (quote-scoped + guid) even when the client reuses an id or
+    /// sends the same line twice.
+    /// </summary>
+    private static string NewShirtLineId(string quotationId, int index) =>
+        $"{quotationId}-s{index}-{Guid.NewGuid():N}";
+
+    private static ShirtLine MapShirt(CreateShirtLineRequest s, string quotationId, int index) => new()
     {
-        Id = string.IsNullOrWhiteSpace(s.Id) ? Guid.NewGuid().ToString("N")[..8] : s.Id,
+        Id = NewShirtLineId(quotationId, index),
         QuotationId = quotationId,
         ColorId = s.ColorId,
         ColorName = s.ColorName,
