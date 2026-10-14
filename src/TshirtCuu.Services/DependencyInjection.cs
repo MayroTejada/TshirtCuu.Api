@@ -22,8 +22,23 @@ public static class DependencyInjection
     {
         services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
         services.Configure<EmailOptions>(configuration.GetSection(EmailOptions.SectionName));
-        // Optional — missing AzureStorage__ConnectionString does not fail startup.
-        services.Configure<AzureStorageOptions>(configuration.GetSection(AzureStorageOptions.SectionName));
+        // Optional — missing Azure storage does not fail startup.
+        // Accept App Setting AzureStorage__ConnectionString, or ConnectionStrings__AzureStorage.
+        services.AddOptions<AzureStorageOptions>()
+            .Configure<IConfiguration>((opts, config) =>
+            {
+                config.GetSection(AzureStorageOptions.SectionName).Bind(opts);
+                if (string.IsNullOrWhiteSpace(opts.ConnectionString))
+                {
+                    opts.ConnectionString =
+                        config.GetConnectionString("AzureStorage")
+                        ?? config["AzureStorage:ConnectionString"]
+                        ?? string.Empty;
+                }
+
+                if (string.IsNullOrWhiteSpace(opts.ContainerName))
+                    opts.ContainerName = "imagenes";
+            });
 
         // Validate presence only — do not open a SQL connection at startup.
         var connectionString = configuration.GetConnectionString(SqlConnectionFactory.ConnectionName);

@@ -83,7 +83,8 @@ Catalog uploads and customer artwork go to a **private** blob container named `i
 
 | App Setting / env var | Notes |
 |----------------------|--------|
-| `AzureStorage__ConnectionString` | Storage account connection string (never commit) |
+| `AzureStorage__ConnectionString` | Storage account connection string (App Setting; never commit) |
+| `ConnectionStrings__AzureStorage` | Alternate: Connection strings blade entry named `AzureStorage` |
 | `AzureStorage__ContainerName` | Optional; default `imagenes` |
 
 If `AzureStorage__ConnectionString` is missing, the API **still starts**. Upload endpoints return **503** with a clear error. Quote create without storage still works (artwork paths stay null).
@@ -94,7 +95,8 @@ export AzureStorage__ConnectionString='DefaultEndpointsProtocol=https;AccountNam
 
 Endpoints:
 
-- `POST /api/quotes` — after the quote is saved, optional `frontImageBase64` / `backImageBase64` on custom sides are uploaded to private `imagenes` (nothing stored if the customer never submits)
+- `POST /api/quotes` — creates the quote; optional `frontImageBase64` / `backImageBase64` are uploaded only after save
+- `POST /api/quotes/{quoteId}/shirts/{shirtId}/artwork?side=front|back` — multipart customer artwork after create (preferred)
 - `POST /api/images?kind=catalog` — admin only (standalone customer artwork upload is not allowed)
 - `POST /api/catalog/designs/upload` — admin multipart (`name`, `categoryId`, `file`) → blob + design row
 - `GET /api/images/{*blobPath}` — stream bytes through the API
