@@ -2,6 +2,7 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using TshirtCuu.Presentation.Features.Errors;
 using TshirtCuu.Services;
 using TshirtCuu.Services.Features.Admin;
 
@@ -107,6 +108,7 @@ app.UseSwaggerUI(options =>
 });
 
 app.UseCors();
+app.UseMiddleware<ErrorLoggingMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
