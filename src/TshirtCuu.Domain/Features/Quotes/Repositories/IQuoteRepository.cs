@@ -10,4 +10,13 @@ public interface IQuoteRepository
     bool UpdateStatus(string id, string status);
     Quotation? SaveReply(string id, string customerReply);
     string NextQuoteId();
+
+    /// <summary>
+    /// Sets private blob paths on a shirt line after quote create (customer artwork).
+    /// </summary>
+    bool UpdateShirtImagePaths(
+        string quotationId,
+        string shirtId,
+        string? frontImageBlobPath,
+        string? backImageBlobPath);
 }

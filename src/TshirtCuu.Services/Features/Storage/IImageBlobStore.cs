@@ -19,6 +19,9 @@ public interface IImageBlobStore
     Task<ImageDownloadResult?> OpenReadAsync(
         string blobPath,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Best-effort delete (used if quote create fails after an upload attempt).</summary>
+    Task DeleteAsync(string blobPath, CancellationToken cancellationToken = default);
 }
 
 public sealed record ImageUploadResult(string BlobPath, string ContentType);
