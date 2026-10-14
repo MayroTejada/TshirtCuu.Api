@@ -4,10 +4,12 @@ using Microsoft.Extensions.DependencyInjection;
 using TshirtCuu.Domain.Features.Admin.Models;
 using TshirtCuu.Domain.Features.Admin.Repositories;
 using TshirtCuu.Domain.Features.Catalog.Repositories;
+using TshirtCuu.Domain.Features.Errors.Repositories;
 using TshirtCuu.Domain.Features.Quotes.Repositories;
 using TshirtCuu.Services.Features.Admin;
 using TshirtCuu.Services.Features.Catalog;
 using TshirtCuu.Services.Features.Email;
+using TshirtCuu.Services.Features.Errors;
 using TshirtCuu.Services.Features.Quotes;
 using TshirtCuu.Services.Features.Storage;
 using TshirtCuu.Services.Persistence;
@@ -59,6 +61,8 @@ public static class DependencyInjection
         services.AddScoped<ICatalogRepository, SqlCatalogRepository>();
         services.AddScoped<IQuoteRepository, SqlQuoteRepository>();
         services.AddScoped<IAdminUserRepository, SqlAdminUserRepository>();
+        services.AddScoped<IErrorLogRepository, SqlErrorLogRepository>();
+        services.AddScoped<IErrorLogger, SqlErrorLogger>();
 
         services.AddScoped<CatalogService>();
         services.AddScoped<QuoteService>();

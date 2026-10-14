@@ -3,6 +3,7 @@ using TshirtCuu.Domain.Features.Catalog.Repositories;
 using TshirtCuu.Domain.Features.Quotes.Models;
 using TshirtCuu.Domain.Features.Quotes.Repositories;
 using TshirtCuu.Services.Features.Email;
+using TshirtCuu.Services.Features.Errors;
 using TshirtCuu.Services.Features.Storage;
 
 namespace TshirtCuu.Services.Features.Quotes;
@@ -12,6 +13,7 @@ public sealed class QuoteService(
     ICatalogRepository catalog,
     ICustomerEmailSender emailSender,
     ImageStorageService images,
+    IErrorLogger errorLogger,
     ILogger<QuoteService> logger)
 {
     public IReadOnlyList<Quotation> List() => repository.GetAll();
@@ -107,9 +109,19 @@ public sealed class QuoteService(
         string? fileName,
         CancellationToken cancellationToken = default)
     {
+        var path = $"POST /api/quotes/{quoteId}/shirts/{shirtId}/artwork?side={side}";
+
         if (!images.IsConfigured)
         {
-            return ArtworkAttachResult.StorageNotConfigured();
+            var result = ArtworkAttachResult.StorageNotConfigured();
+            await errorLogger
+                .LogAsync(
+                    path,
+                    "Falló la subida de imagen de cotización",
+                    result.Error,
+                    cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+            return result;
         }
 
         var quote = repository.GetById(quoteId);
@@ -151,7 +163,16 @@ public sealed class QuoteService(
                     uploaded.BlobPath,
                     quoteId,
                     shirtId);
-                return ArtworkAttachResult.PathSaveFailed(ex.Message);
+                var failed = ArtworkAttachResult.PathSaveFailed(ex.Message);
+                await errorLogger
+                    .LogAsync(
+                        path,
+                        "Falló guardar ruta de imagen en la camisa",
+                        failed.Error,
+                        ex,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+                return failed;
             }
 
             logger.LogInformation(
@@ -165,7 +186,16 @@ public sealed class QuoteService(
         }
         catch (InvalidOperationException ex)
         {
-            return ArtworkAttachResult.Failed(ex.Message);
+            var failed = ArtworkAttachResult.Failed(ex.Message);
+            await errorLogger
+                .LogAsync(
+                    path,
+                    "Falló la subida de imagen de cotización",
+                    failed.Error,
+                    ex,
+                    cancellationToken)
+                .ConfigureAwait(false);
+            return failed;
         }
         catch (Exception ex)
         {
@@ -175,7 +205,16 @@ public sealed class QuoteService(
                 normalized,
                 quoteId,
                 shirtId);
-            return ArtworkAttachResult.Failed(ex.Message);
+            var failed = ArtworkAttachResult.Failed(ex.Message);
+            await errorLogger
+                .LogAsync(
+                    path,
+                    "Falló la subida de imagen de cotización",
+                    failed.Error,
+                    ex,
+                    cancellationToken)
+                .ConfigureAwait(false);
+            return failed;
         }
     }
 
@@ -229,6 +268,13 @@ public sealed class QuoteService(
                 "Azure Storage is not configured. Set App Setting AzureStorage__ConnectionString " +
                 "(or ConnectionStrings__AzureStorage). Quote was saved without artwork blobs.";
             logger.LogWarning("Artwork skip for {QuoteId}: {Msg}", saved.Id, msg);
+            await errorLogger
+                .LogAsync(
+                    $"POST /api/quotes/{saved.Id}",
+                    "Falló la subida de imagen de cotización",
+                    msg,
+                    cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
             return msg;
         }
 

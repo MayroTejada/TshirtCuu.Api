@@ -103,6 +103,14 @@ Endpoints:
 
 Blob paths are stored on `Designs.ImageBlobPath` and `ShirtLines.FrontImageBlobPath` / `BackImageBlobPath` (see TShirtMigration).
 
+## Error log (admin Errores)
+
+Unhandled exceptions and failed operations (including failed quote artwork uploads) are written to SQL via `usp_ErrorLogs_Insert`. Logging failures never fail the HTTP request.
+
+| Endpoint | Auth | Notes |
+|----------|------|--------|
+| `GET /api/admin/errors?take=100` | Admin JWT | Latest rows (newest first) |
+
 ## Run locally
 
 ```bash
