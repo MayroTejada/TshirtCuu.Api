@@ -20,10 +20,14 @@ public sealed class ShirtLine
     public ArtworkSource FrontSource { get; set; } = ArtworkSource.None;
     public string? FrontLabel { get; set; }
     public string? FrontCatalogId { get; set; }
+    /// <summary>Private blob path for custom front artwork (API-mediated read).</summary>
+    public string? FrontImageBlobPath { get; set; }
     public ArtPlacement FrontPlacement { get; set; } = new();
 
     public ArtworkSource BackSource { get; set; } = ArtworkSource.None;
     public string? BackLabel { get; set; }
     public string? BackCatalogId { get; set; }
+    /// <summary>Private blob path for custom back artwork (API-mediated read).</summary>
+    public string? BackImageBlobPath { get; set; }
     public ArtPlacement BackPlacement { get; set; } = new();
 }

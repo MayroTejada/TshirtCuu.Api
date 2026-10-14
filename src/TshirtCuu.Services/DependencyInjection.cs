@@ -9,6 +9,7 @@ using TshirtCuu.Services.Features.Admin;
 using TshirtCuu.Services.Features.Catalog;
 using TshirtCuu.Services.Features.Email;
 using TshirtCuu.Services.Features.Quotes;
+using TshirtCuu.Services.Features.Storage;
 using TshirtCuu.Services.Persistence;
 
 namespace TshirtCuu.Services;
@@ -21,6 +22,8 @@ public static class DependencyInjection
     {
         services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
         services.Configure<EmailOptions>(configuration.GetSection(EmailOptions.SectionName));
+        // Optional — missing AzureStorage__ConnectionString does not fail startup.
+        services.Configure<AzureStorageOptions>(configuration.GetSection(AzureStorageOptions.SectionName));
 
         // Validate presence only — do not open a SQL connection at startup.
         var connectionString = configuration.GetConnectionString(SqlConnectionFactory.ConnectionName);
@@ -36,6 +39,8 @@ public static class DependencyInjection
         }
 
         services.AddSingleton<ISqlConnectionFactory, SqlConnectionFactory>();
+        services.AddSingleton<IImageBlobStore, AzureBlobImageStore>();
+        services.AddSingleton<ImageStorageService>();
         services.AddScoped<ICatalogRepository, SqlCatalogRepository>();
         services.AddScoped<IQuoteRepository, SqlQuoteRepository>();
         services.AddScoped<IAdminUserRepository, SqlAdminUserRepository>();

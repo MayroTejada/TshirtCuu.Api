@@ -84,7 +84,8 @@ public sealed class SqlCatalogRepository(ISqlConnectionFactory connections) : IC
                 design.CategoryId,
                 design.Tagline,
                 design.AccentHex,
-                design.InkHex
+                design.InkHex,
+                design.ImageBlobPath
             },
             commandType: CommandType.StoredProcedure);
     }
@@ -101,7 +102,8 @@ public sealed class SqlCatalogRepository(ISqlConnectionFactory connections) : IC
                 design.CategoryId,
                 design.Tagline,
                 design.AccentHex,
-                design.InkHex
+                design.InkHex,
+                design.ImageBlobPath
             },
             commandType: CommandType.StoredProcedure);
         return rows > 0;
